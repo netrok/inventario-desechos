@@ -34,13 +34,11 @@
                         </span>
                     </a>
 
-                    {{-- Categorías --}}
                     <a href="{{ route('categorias.index') }}"
                        class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('categorias.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                         Categorías
                     </a>
 
-                    {{-- ✅ Ubicaciones --}}
                     <a href="{{ route('ubicaciones.index') }}"
                        class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('ubicaciones.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                         Ubicaciones
@@ -64,28 +62,40 @@
                         <x-dropdown-link :href="route('profile.edit')">Perfil</x-dropdown-link>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <x-dropdown-link :href="route('logout')" onclick="event.preventDefault(); this.closest('form').submit();">
+                            <x-dropdown-link :href="route('logout')"
+                                             onclick="event.preventDefault(); this.closest('form').submit();">
                                 Cerrar sesión
                             </x-dropdown-link>
                         </form>
                     </x-slot>
                 </x-dropdown>
 
-                {{-- ✅ Botón contextual --}}
-                @if(request()->routeIs('items.*') && !request()->routeIs('items.trash'))
-                    <a href="{{ route('items.create') }}"
+                {{-- Botón contextual --}}
+                @php
+                    $showNew =
+                        (request()->routeIs('items.*') && !request()->routeIs('items.trash'))
+                        || request()->routeIs('categorias.*')
+                        || request()->routeIs('ubicaciones.*');
+
+                    $newUrl = match (true) {
+                        request()->routeIs('items.*') && !request()->routeIs('items.trash') => route('items.create'),
+                        request()->routeIs('categorias.*') => route('categorias.create'),
+                        request()->routeIs('ubicaciones.*') => route('ubicaciones.create'),
+                        default => null,
+                    };
+
+                    $newLabel = match (true) {
+                        request()->routeIs('items.*') && !request()->routeIs('items.trash') => '+ Nuevo',
+                        request()->routeIs('categorias.*') => '+ Nueva',
+                        request()->routeIs('ubicaciones.*') => '+ Nueva',
+                        default => '',
+                    };
+                @endphp
+
+                @if($showNew && $newUrl)
+                    <a href="{{ $newUrl }}"
                        class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
-                        + Nuevo
-                    </a>
-                @elseif(request()->routeIs('categorias.*'))
-                    <a href="{{ route('categorias.create') }}"
-                       class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
-                        + Nueva
-                    </a>
-                @elseif(request()->routeIs('ubicaciones.*'))
-                    <a href="{{ route('ubicaciones.create') }}"
-                       class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
-                        + Nueva
+                        {{ $newLabel }}
                     </a>
                 @endif
             </div>
@@ -126,13 +136,12 @@
                 Categorías
             </a>
 
-            {{-- ✅ Ubicaciones --}}
             <a href="{{ route('ubicaciones.index') }}"
                class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('ubicaciones.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                 Ubicaciones
             </a>
 
-            {{-- ✅ Botón contextual --}}
+            {{-- Botón contextual --}}
             @if(request()->routeIs('items.*') && !request()->routeIs('items.trash'))
                 <div class="pt-2 border-t border-gray-200">
                     <a href="{{ route('items.create') }}"

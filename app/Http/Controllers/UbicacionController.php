@@ -25,8 +25,8 @@ class UbicacionController extends Controller
 
         $ubicaciones = Ubicacion::query()
             ->when($q !== '', fn ($qq) => $qq->where('nombre', 'ilike', "%{$q}%"))
-            ->withCount('items')
-            ->orderBy('nombre')
+            ->withCount('items')               // ✅ requerido para items_count en la vista
+            ->orderBy('nombre')                // (o ->orderByDesc('items_count')->orderBy('nombre'))
             ->paginate(15)
             ->withQueryString();
 
@@ -42,9 +42,9 @@ class UbicacionController extends Controller
     {
         $data = $request->validated();
 
-        // ✅ Solo si la columna existe (evita tu error actual en PG)
+        // ✅ Solo si la columna existe (por si en dev hiciste migraciones raras)
         if (Schema::hasColumn('ubicaciones', 'activo')) {
-            $data['activo'] = $request->boolean('activo');
+            $data['activo'] = (bool) $request->boolean('activo');
         }
 
         Ubicacion::create($data);
@@ -64,7 +64,7 @@ class UbicacionController extends Controller
         $data = $request->validated();
 
         if (Schema::hasColumn('ubicaciones', 'activo')) {
-            $data['activo'] = $request->boolean('activo');
+            $data['activo'] = (bool) $request->boolean('activo');
         }
 
         $ubicacion->update($data);

@@ -10,6 +10,7 @@ use App\Models\Movimiento;
 use App\Models\Ubicacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -65,10 +66,16 @@ class ItemController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        // Categorías: por si tu tabla no tiene 'activo' aún
+        $categoriasQuery = Categoria::query()->orderBy('nombre');
+        if (Schema::hasColumn('categorias', 'activo')) {
+            $categoriasQuery->where('activo', true);
+        }
+
         return view('items.index', [
             'items' => $items,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
-            'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
+            'categorias' => $categoriasQuery->get(),
             'estados' => Item::ESTADOS,
             'filters' => [
                 'q' => $q,
@@ -83,26 +90,35 @@ class ItemController extends Controller
 
     public function create()
     {
+        $categoriasQuery = Categoria::query()->orderBy('nombre');
+        if (Schema::hasColumn('categorias', 'activo')) {
+            $categoriasQuery->where('activo', true);
+        }
+
         return view('items.create', [
             'item' => null,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
-            'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
+            'categorias' => $categoriasQuery->get(),
             'estados' => Item::ESTADOS,
         ]);
     }
 
     public function store(StoreItemRequest $request)
     {
-        // codigo lo genera el modelo
-        $data = $request->safe()->except(['codigo', 'foto', 'delete_foto']);
+        // ✅ Usa validated() para asegurar que categoria_id / ubicacion_id entren
+        $data = $request->validated();
 
-        if ($request->hasFile('foto')) {
+        // codigo lo genera el modelo (si te llega, lo ignoras)
+        unset($data['codigo']);
+
+        // ✅ Foto solo si existe columna
+        if ($request->hasFile('foto') && Schema::hasColumn('items', 'foto_path')) {
             $data['foto_path'] = $request->file('foto')->store('items', 'public');
         }
+        unset($data['foto']);
 
         $item = Item::create($data);
 
-        // Movimiento: ALTA
         Movimiento::create([
             'item_id' => $item->id,
             'user_id' => Auth::id(),
@@ -137,10 +153,15 @@ class ItemController extends Controller
 
     public function edit(Item $item)
     {
+        $categoriasQuery = Categoria::query()->orderBy('nombre');
+        if (Schema::hasColumn('categorias', 'activo')) {
+            $categoriasQuery->where('activo', true);
+        }
+
         return view('items.edit', [
             'item' => $item,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
-            'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
+            'categorias' => $categoriasQuery->get(),
             'estados' => Item::ESTADOS,
         ]);
     }
@@ -148,12 +169,11 @@ class ItemController extends Controller
     public function update(UpdateItemRequest $request, Item $item)
     {
         $data = $request->validated();
+        $data['delete_foto'] = $request->boolean('delete_foto');
 
-        // Guardar antes para movimientos
         $beforeEstado = $item->estado;
         $beforeUbicacion = $item->ubicacion_id;
 
-        // Validar transición de estado si cambió
         $toEstado = $data['estado'] ?? $item->estado;
         if ($beforeEstado !== $toEstado && !Item::canTransition($beforeEstado, $toEstado)) {
             return back()->withErrors([
@@ -161,8 +181,8 @@ class ItemController extends Controller
             ])->withInput();
         }
 
-        // Eliminar foto guardada si se pidió
-        if (!empty($data['delete_foto'])) {
+        // ✅ Borrar foto
+        if ($data['delete_foto'] && Schema::hasColumn('items', 'foto_path')) {
             if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
                 Storage::disk('public')->delete($item->foto_path);
             }
@@ -170,14 +190,17 @@ class ItemController extends Controller
         }
         unset($data['delete_foto']);
 
-        // Foto nueva (reemplaza)
-        if ($request->hasFile('foto')) {
+        // ✅ Foto nueva (reemplaza)
+        if ($request->hasFile('foto') && Schema::hasColumn('items', 'foto_path')) {
             if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
                 Storage::disk('public')->delete($item->foto_path);
             }
             $data['foto_path'] = $request->file('foto')->store('items', 'public');
         }
         unset($data['foto']);
+
+        // codigo no se toca aquí (a menos que tú lo permitas)
+        unset($data['codigo']);
 
         $item->update($data);
 
@@ -230,6 +253,8 @@ class ItemController extends Controller
             $evidenciaPath = $request->file('evidencia')->store('movimientos', 'public');
         }
 
+        $ubicacionActual = $item->ubicacion_id;
+
         $item->update(['estado' => $to]);
 
         Movimiento::create([
@@ -238,8 +263,8 @@ class ItemController extends Controller
             'tipo' => $to === 'BAJA' ? 'BAJA' : ($to === 'VENDIDO' ? 'VENTA' : 'CAMBIO_ESTADO'),
             'de_estado' => $from,
             'a_estado' => $to,
-            'de_ubicacion_id' => $item->ubicacion_id,
-            'a_ubicacion_id' => $item->ubicacion_id,
+            'de_ubicacion_id' => $ubicacionActual,
+            'a_ubicacion_id' => $ubicacionActual,
             'notas' => $data['notas'] ?? 'Cambio de estado',
             'evidencia_path' => $evidenciaPath,
             'fecha' => now(),
@@ -270,14 +295,16 @@ class ItemController extends Controller
             $evidenciaPath = $request->file('evidencia')->store('movimientos', 'public');
         }
 
+        $estadoActual = $item->estado;
+
         $item->update(['ubicacion_id' => $toU]);
 
         Movimiento::create([
             'item_id' => $item->id,
             'user_id' => Auth::id(),
             'tipo' => 'TRASLADO',
-            'de_estado' => $item->estado,
-            'a_estado' => $item->estado,
+            'de_estado' => $estadoActual,
+            'a_estado' => $estadoActual,
             'de_ubicacion_id' => $fromU,
             'a_ubicacion_id' => $toU,
             'notas' => $data['notas'] ?? 'Movimiento de ubicación',
@@ -334,8 +361,10 @@ class ItemController extends Controller
     {
         $item = Item::onlyTrashed()->findOrFail($id);
 
-        if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
-            Storage::disk('public')->delete($item->foto_path);
+        if (Schema::hasColumn('items', 'foto_path')) {
+            if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
+                Storage::disk('public')->delete($item->foto_path);
+            }
         }
 
         $item->forceDelete();
@@ -346,7 +375,6 @@ class ItemController extends Controller
     public function destroy(Item $item)
     {
         $item->delete();
-
         return redirect()->route('items.index')->with('success', 'Item enviado a papelera.');
     }
 }

@@ -143,7 +143,7 @@
                         </div>
                     </div>
 
-                    {{-- Historial / Movimientos (PRO) --}}
+                    {{-- Historial / Movimientos --}}
                     <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
                         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                             <div>
@@ -162,6 +162,11 @@
                             @else
                                 <ol class="relative border-s border-gray-200 ms-2 space-y-6">
                                     @foreach($movs as $m)
+                                        @php
+                                            $dtRaw = $m->fecha ?: $m->created_at;
+                                            $dt = $dtRaw ? \Illuminate\Support\Carbon::parse($dtRaw) : null;
+                                        @endphp
+
                                         <li class="ms-6">
                                             <span class="absolute -start-2.5 mt-1 flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white">
                                                 <span class="h-2.5 w-2.5 rounded-full bg-gray-900"></span>
@@ -178,7 +183,7 @@
                                                 </div>
 
                                                 <div class="text-xs text-gray-500">
-                                                    {{ ($m->fecha ?? $m->created_at)?->format('Y-m-d H:i') }}
+                                                    {{ $dt?->format('Y-m-d H:i') ?? '—' }}
                                                     @if($m->user) <span class="text-gray-300">•</span> {{ $m->user->name }} @endif
                                                 </div>
                                             </div>
@@ -255,7 +260,7 @@
                         </div>
 
                         <div class="p-6 space-y-4">
-                            {{-- Cambiar estado (PRO: notas + evidencia) --}}
+                            {{-- Cambiar estado --}}
                             <form method="POST"
                                   action="{{ route('items.changeEstado', $item->id) }}"
                                   enctype="multipart/form-data"
@@ -282,7 +287,7 @@
 
                             <div class="h-px bg-gray-100"></div>
 
-                            {{-- Mover ubicación (PRO: notas + evidencia) --}}
+                            {{-- Mover ubicación --}}
                             <form method="POST"
                                   action="{{ route('items.moveUbicacion', $item->id) }}"
                                   enctype="multipart/form-data"

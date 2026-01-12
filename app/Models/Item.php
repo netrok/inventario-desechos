@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -28,10 +30,10 @@ class Item extends Model
         'marca',
         'modelo',
 
-        // Legacy temporal (mientras migras y luego lo eliminas)
+        // Legacy temporal (si aún lo usas en UI)
         'categoria',
 
-        // ✅ Catálogo
+        // FK catálogo
         'categoria_id',
 
         'estado',
@@ -40,16 +42,28 @@ class Item extends Model
         'foto_path',
     ];
 
+    protected $casts = [
+        'codigo_seq' => 'integer',
+        'categoria_id' => 'integer',
+        'ubicacion_id' => 'integer',
+    ];
+
     protected static function booted(): void
     {
         static::creating(function (Item $item) {
-            if (!empty($item->codigo)) {
+            if (!empty($item->codigo) && !empty($item->codigo_seq)) {
                 return;
             }
 
-            $max = (int) (self::max('codigo_seq') ?? 0);
-            $item->codigo_seq = $max + 1;
-            $item->codigo = 'ITM-' . str_pad((string) $item->codigo_seq, 6, '0', STR_PAD_LEFT);
+            // ✅ En PostgreSQL evita duplicados con lock de tabla (simple y efectivo)
+            // Nota: esto corre dentro del insert; si quieres ultra-pro, usa sequence nativa.
+            $next = DB::transaction(function () {
+                DB::statement('LOCK TABLE items IN EXCLUSIVE MODE');
+                return (int) (DB::table('items')->max('codigo_seq') ?? 0) + 1;
+            });
+
+            $item->codigo_seq = $item->codigo_seq ?: $next;
+            $item->codigo = $item->codigo ?: ('ITM-' . str_pad((string) $item->codigo_seq, 6, '0', STR_PAD_LEFT));
         });
     }
 
@@ -71,7 +85,7 @@ class Item extends Model
         return $this->belongsTo(Ubicacion::class);
     }
 
-    // ✅ Relación con catálogo de categorías (nombre distinto para no chocar con el campo legacy)
+    // ✅ Relación catálogo (nombre distinto para no chocar con campo legacy)
     public function categoriaRef(): BelongsTo
     {
         return $this->belongsTo(Categoria::class, 'categoria_id');
@@ -79,17 +93,17 @@ class Item extends Model
 
     public function movimientos(): HasMany
     {
-        // ✅ Si Movimiento tiene global scope latest_first (created_at desc, id desc),
-        // aquí NO ordenes otra vez.
         return $this->hasMany(Movimiento::class);
     }
 
-    // ✅ Accesor: úsalo como $item->foto_url
+    // ✅ Accesor: $item->foto_url
     public function getFotoUrlAttribute(): string
     {
-        return $this->foto_path
-            ? asset('storage/' . $this->foto_path)
-            : asset('images/item-placeholder.png');
+        if ($this->foto_path && Storage::disk('public')->exists($this->foto_path)) {
+            return Storage::url($this->foto_path);
+        }
+
+        return asset('images/item-placeholder.png');
     }
 
     public function getActivitylogOptions(): LogOptions

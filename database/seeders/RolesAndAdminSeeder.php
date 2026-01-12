@@ -13,16 +13,17 @@ class RolesAndAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        // ✅ Importante para Spatie (cache de permisos/roles)
+        // ✅ Limpia cache de Spatie (OBLIGATORIO cuando seeds/permisos cambian)
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $guard = 'web';
 
         // 1) Roles
         $roles = ['Admin', 'Almacen', 'Ventas', 'Auditor'];
+
         foreach ($roles as $r) {
             Role::firstOrCreate([
-                'name' => $r,
+                'name'       => $r,
                 'guard_name' => $guard,
             ]);
         }
@@ -52,7 +53,7 @@ class RolesAndAdminSeeder extends Seeder
             'categorias.editar',
             'categorias.eliminar',
 
-            // Ubicaciones ✅ (CRUD)
+            // Ubicaciones
             'ubicaciones.ver',
             'ubicaciones.crear',
             'ubicaciones.editar',
@@ -73,16 +74,16 @@ class RolesAndAdminSeeder extends Seeder
 
         foreach ($perms as $p) {
             Permission::firstOrCreate([
-                'name' => $p,
+                'name'       => $p,
                 'guard_name' => $guard,
             ]);
         }
 
-        // 3) Roles ya creados
-        $adminRole   = Role::where('name', 'Admin')->where('guard_name', $guard)->firstOrFail();
-        $almacenRole = Role::where('name', 'Almacen')->where('guard_name', $guard)->firstOrFail();
-        $ventasRole  = Role::where('name', 'Ventas')->where('guard_name', $guard)->firstOrFail();
-        $auditorRole = Role::where('name', 'Auditor')->where('guard_name', $guard)->firstOrFail();
+        // 3) Obtener roles (ya creados)
+        $adminRole   = Role::firstWhere(['name' => 'Admin',   'guard_name' => $guard]);
+        $almacenRole = Role::firstWhere(['name' => 'Almacen', 'guard_name' => $guard]);
+        $ventasRole  = Role::firstWhere(['name' => 'Ventas',  'guard_name' => $guard]);
+        $auditorRole = Role::firstWhere(['name' => 'Auditor', 'guard_name' => $guard]);
 
         // Admin = TODO
         $adminRole->syncPermissions($perms);
@@ -90,15 +91,12 @@ class RolesAndAdminSeeder extends Seeder
         // Almacén
         $almacenRole->syncPermissions([
             'dashboard.ver',
-
             'items.ver','items.crear','items.editar','items.eliminar',
             'items.cambiar_estado','items.mover',
             'items.papelera','items.restaurar',
             'movimientos.ver',
-
             'categorias.ver',
             'ubicaciones.ver',
-
             'catalogos.ver',
         ]);
 
@@ -109,7 +107,6 @@ class RolesAndAdminSeeder extends Seeder
             'items.cambiar_estado',
             'movimientos.ver',
             'ventas.ver','ventas.crear','ventas.cerrar',
-            // si quieres que Ventas vea catálogos:
             'categorias.ver',
             'ubicaciones.ver',
         ]);
@@ -130,14 +127,14 @@ class RolesAndAdminSeeder extends Seeder
         $admin = User::firstOrCreate(
             ['email' => 'admin@desechos.test'],
             [
-                'name' => 'Admin',
+                'name'     => 'Admin',
                 'password' => Hash::make('Admin123*'),
             ]
         );
 
         $admin->syncRoles([$adminRole]);
 
-        // ✅ Limpia cache al final también (a veces ayuda en dev)
+        // ✅ Limpia cache al final (útil en dev)
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }
