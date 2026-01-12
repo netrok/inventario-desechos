@@ -15,29 +15,28 @@
             </div>
 
             <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
-                {{-- ✅ IMPORTANTE: enctype para subir archivos --}}
-                <form method="POST" action="{{ route('items.store') }}" enctype="multipart/form-data" class="p-6">
+                <form method="POST"
+                      action="{{ route('items.store') }}"
+                      enctype="multipart/form-data"
+                      class="p-6">
                     @csrf
 
-                    {{-- tu partial --}}
-                    @include('items._form', ['item' => null])
+                    {{-- ✅ Partial con TODO (incluye Foto) --}}
+                    @include('items._form', [
+                        'item' => $item ?? null,
+                        'estados' => $estados ?? \App\Models\Item::ESTADOS,
+                        'ubicaciones' => $ubicaciones ?? collect(),
+                        'categorias' => $categorias ?? collect(),
+                    ])
 
-                    {{-- ✅ Campo Foto (si lo quieres aquí, mejor que “form suelto”) --}}
-                    <div class="mt-5">
-                        <label class="block text-sm font-medium text-gray-700">Foto</label>
-                        <input type="file" name="foto" accept="image/*"
-                               class="mt-1 block w-full text-sm text-gray-700"/>
-                        @error('foto')
-                            <p class="mt-1 text-sm text-rose-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="mt-6 flex items-center justify-end gap-2 border-t pt-5">
+                    <div class="mt-6 flex items-center justify-end gap-2 border-t border-gray-100 pt-5">
                         <a href="{{ route('items.index') }}"
                            class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50">
                             Cancelar
                         </a>
-                        <button class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black">
+
+                        <button type="submit"
+                                class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black">
                             Guardar
                         </button>
                     </div>

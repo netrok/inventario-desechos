@@ -2,45 +2,131 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-use App\Models\User;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class RolesAndAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        // Importante para Spatie cuando cambias configs/guard
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        // ✅ Importante para Spatie (cache de permisos/roles)
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // Roles (mínimos)
+        $guard = 'web';
+
+        // 1) Roles
         $roles = ['Admin', 'Almacen', 'Ventas', 'Auditor'];
         foreach ($roles as $r) {
-            Role::firstOrCreate(['name' => $r, 'guard_name' => 'web']);
+            Role::firstOrCreate([
+                'name' => $r,
+                'guard_name' => $guard,
+            ]);
         }
 
-        // Permisos base (luego los ampliamos)
+        // 2) Permisos
         $perms = [
-            'items.ver', 'items.crear', 'items.editar', 'items.eliminar',
+            // Dashboard
+            'dashboard.ver',
+
+            // Items
+            'items.ver',
+            'items.crear',
+            'items.editar',
+            'items.eliminar',
+            'items.papelera',
+            'items.restaurar',
+            'items.borrar_definitivo',
+            'items.cambiar_estado',
+            'items.mover',
+
+            // Movimientos
             'movimientos.ver',
-            'ventas.ver', 'ventas.crear', 'ventas.cerrar',
-            'catalogos.ver', 'catalogos.editar',
+
+            // Categorías
+            'categorias.ver',
+            'categorias.crear',
+            'categorias.editar',
+            'categorias.eliminar',
+
+            // Ubicaciones ✅ (CRUD)
+            'ubicaciones.ver',
+            'ubicaciones.crear',
+            'ubicaciones.editar',
+            'ubicaciones.eliminar',
+
+            // (Opcional) catálogos genéricos
+            'catalogos.ver',
+            'catalogos.editar',
+
+            // (Opcional) usuarios
             'usuarios.gestionar',
+
+            // (Opcional) ventas
+            'ventas.ver',
+            'ventas.crear',
+            'ventas.cerrar',
         ];
 
         foreach ($perms as $p) {
-            Permission::firstOrCreate(['name' => $p, 'guard_name' => 'web']);
+            Permission::firstOrCreate([
+                'name' => $p,
+                'guard_name' => $guard,
+            ]);
         }
 
-        // Asignación sugerida
-        Role::findByName('Admin')->givePermissionTo(Permission::all());
-        Role::findByName('Almacen')->givePermissionTo(['items.ver','items.crear','items.editar','movimientos.ver','catalogos.ver']);
-        Role::findByName('Ventas')->givePermissionTo(['items.ver','ventas.ver','ventas.crear','ventas.cerrar','movimientos.ver']);
-        Role::findByName('Auditor')->givePermissionTo(['items.ver','movimientos.ver','ventas.ver','catalogos.ver']);
+        // 3) Roles ya creados
+        $adminRole   = Role::where('name', 'Admin')->where('guard_name', $guard)->firstOrFail();
+        $almacenRole = Role::where('name', 'Almacen')->where('guard_name', $guard)->firstOrFail();
+        $ventasRole  = Role::where('name', 'Ventas')->where('guard_name', $guard)->firstOrFail();
+        $auditorRole = Role::where('name', 'Auditor')->where('guard_name', $guard)->firstOrFail();
 
-        // Usuario admin (si no existe)
+        // Admin = TODO
+        $adminRole->syncPermissions($perms);
+
+        // Almacén
+        $almacenRole->syncPermissions([
+            'dashboard.ver',
+
+            'items.ver','items.crear','items.editar','items.eliminar',
+            'items.cambiar_estado','items.mover',
+            'items.papelera','items.restaurar',
+            'movimientos.ver',
+
+            'categorias.ver',
+            'ubicaciones.ver',
+
+            'catalogos.ver',
+        ]);
+
+        // Ventas
+        $ventasRole->syncPermissions([
+            'dashboard.ver',
+            'items.ver',
+            'items.cambiar_estado',
+            'movimientos.ver',
+            'ventas.ver','ventas.crear','ventas.cerrar',
+            // si quieres que Ventas vea catálogos:
+            'categorias.ver',
+            'ubicaciones.ver',
+        ]);
+
+        // Auditor
+        $auditorRole->syncPermissions([
+            'dashboard.ver',
+            'items.ver',
+            'items.papelera',
+            'movimientos.ver',
+            'categorias.ver',
+            'ubicaciones.ver',
+            'catalogos.ver',
+            'ventas.ver',
+        ]);
+
+        // 4) Usuario Admin
         $admin = User::firstOrCreate(
             ['email' => 'admin@desechos.test'],
             [
@@ -49,35 +135,9 @@ class RolesAndAdminSeeder extends Seeder
             ]
         );
 
-        if (! $admin->hasRole('Admin')) {
-            $admin->assignRole('Admin');
-        }
+        $admin->syncRoles([$adminRole]);
+
+        // ✅ Limpia cache al final también (a veces ayuda en dev)
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }
-
-$perms = [
-    'items.ver','items.crear','items.editar','items.eliminar',
-    'items.cambiar_estado','items.mover',
-    'items.papelera','items.restaurar','items.borrar_definitivo',
-    'movimientos.ver',
-    'dashboard.ver',
-    'catalogos.ver','catalogos.editar',
-    'usuarios.gestionar',
-];
-
-Role::findByName('Admin')->givePermissionTo(Permission::all());
-
-Role::findByName('Almacen')->givePermissionTo([
-    'items.ver','items.crear','items.editar','items.eliminar',
-    'items.cambiar_estado','items.mover',
-    'items.papelera','items.restaurar',
-    'movimientos.ver','dashboard.ver','catalogos.ver'
-]);
-
-Role::findByName('Ventas')->givePermissionTo([
-    'items.ver','items.cambiar_estado','movimientos.ver','dashboard.ver'
-]);
-
-Role::findByName('Auditor')->givePermissionTo([
-    'items.ver','items.papelera','movimientos.ver','dashboard.ver','catalogos.ver'
-]);

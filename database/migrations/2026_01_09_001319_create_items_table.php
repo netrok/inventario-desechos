@@ -10,18 +10,16 @@ return new class extends Migration {
         Schema::create('items', function (Blueprint $table) {
             $table->id();
 
-            $table->string('codigo', 40)->unique(); // interno: ITM-000001
+            $table->string('codigo', 40)->unique(); // ITM-000001
             $table->string('serie', 120)->nullable()->index();
             $table->string('marca', 80)->nullable();
             $table->string('modelo', 120)->nullable();
-            $table->string('categoria', 80)->nullable(); // luego lo hacemos FK si quieres
+            $table->string('categoria', 80)->nullable(); // legacy temporal
 
             $table->string('estado', 30)->default('DISPONIBLE')->index();
-            // DISPONIBLE | RESERVADO | VENDIDO | BAJA | REPARACION
 
-            $table->foreignId('ubicacion_id')->nullable()
-                ->constrained('ubicaciones')
-                ->nullOnDelete();
+            // ✅ SIN FK aquí (porque ubicaciones todavía no existe cuando corre esta migración)
+            $table->foreignId('ubicacion_id')->nullable()->index();
 
             $table->text('notas')->nullable();
 

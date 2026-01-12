@@ -33,6 +33,18 @@
                             @endif
                         </span>
                     </a>
+
+                    {{-- Categorías --}}
+                    <a href="{{ route('categorias.index') }}"
+                       class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('categorias.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Categorías
+                    </a>
+
+                    {{-- ✅ Ubicaciones --}}
+                    <a href="{{ route('ubicaciones.index') }}"
+                       class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('ubicaciones.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                        Ubicaciones
+                    </a>
                 </div>
             </div>
 
@@ -59,11 +71,21 @@
                     </x-slot>
                 </x-dropdown>
 
-                {{-- + Nuevo solo en Items (no en Papelera) --}}
+                {{-- ✅ Botón contextual --}}
                 @if(request()->routeIs('items.*') && !request()->routeIs('items.trash'))
                     <a href="{{ route('items.create') }}"
                        class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
                         + Nuevo
+                    </a>
+                @elseif(request()->routeIs('categorias.*'))
+                    <a href="{{ route('categorias.create') }}"
+                       class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
+                        + Nueva
+                    </a>
+                @elseif(request()->routeIs('ubicaciones.*'))
+                    <a href="{{ route('ubicaciones.create') }}"
+                       class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
+                        + Nueva
                     </a>
                 @endif
             </div>
@@ -99,12 +121,37 @@
                 Papelera @if(($itemsTrashCount ?? 0) > 0) ({{ $itemsTrashCount }}) @endif
             </a>
 
-            {{-- + Nuevo solo en Items (no en Papelera) --}}
+            <a href="{{ route('categorias.index') }}"
+               class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('categorias.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                Categorías
+            </a>
+
+            {{-- ✅ Ubicaciones --}}
+            <a href="{{ route('ubicaciones.index') }}"
+               class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('ubicaciones.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                Ubicaciones
+            </a>
+
+            {{-- ✅ Botón contextual --}}
             @if(request()->routeIs('items.*') && !request()->routeIs('items.trash'))
                 <div class="pt-2 border-t border-gray-200">
                     <a href="{{ route('items.create') }}"
                        class="block rounded-lg px-3 py-2 text-sm bg-gray-900 text-white hover:bg-black">
                         + Nuevo
+                    </a>
+                </div>
+            @elseif(request()->routeIs('categorias.*'))
+                <div class="pt-2 border-t border-gray-200">
+                    <a href="{{ route('categorias.create') }}"
+                       class="block rounded-lg px-3 py-2 text-sm bg-gray-900 text-white hover:bg-black">
+                        + Nueva
+                    </a>
+                </div>
+            @elseif(request()->routeIs('ubicaciones.*'))
+                <div class="pt-2 border-t border-gray-200">
+                    <a href="{{ route('ubicaciones.create') }}"
+                       class="block rounded-lg px-3 py-2 text-sm bg-gray-900 text-white hover:bg-black">
+                        + Nueva
                     </a>
                 </div>
             @endif

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreItemRequest;
 use App\Http\Requests\UpdateItemRequest;
+use App\Models\Categoria;
 use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Ubicacion;
@@ -34,9 +35,10 @@ class ItemController extends Controller
         $q = trim((string) $request->get('q', ''));
         $estado = $request->get('estado') ?: null;
         $ubicacionId = $request->get('ubicacion_id') ?: null;
+        $categoriaId = $request->get('categoria_id') ?: null;
 
         $base = Item::query()
-            ->with('ubicacion')
+            ->with(['ubicacion', 'categoriaRef'])
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->where(function ($w) use ($q) {
                     $w->where('codigo', 'ilike', "%{$q}%")
@@ -46,7 +48,8 @@ class ItemController extends Controller
                 });
             })
             ->when($estado, fn ($qq) => $qq->where('estado', $estado))
-            ->when($ubicacionId, fn ($qq) => $qq->where('ubicacion_id', $ubicacionId));
+            ->when($ubicacionId, fn ($qq) => $qq->where('ubicacion_id', $ubicacionId))
+            ->when($categoriaId, fn ($qq) => $qq->where('categoria_id', $categoriaId));
 
         $stats = (clone $base)->selectRaw("
             count(*) as total,
@@ -65,11 +68,13 @@ class ItemController extends Controller
         return view('items.index', [
             'items' => $items,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
+            'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
             'estados' => Item::ESTADOS,
             'filters' => [
                 'q' => $q,
                 'estado' => $estado,
                 'ubicacion_id' => $ubicacionId,
+                'categoria_id' => $categoriaId,
             ],
             'stats' => $stats,
             'trashCount' => Item::onlyTrashed()->count(),
@@ -79,15 +84,17 @@ class ItemController extends Controller
     public function create()
     {
         return view('items.create', [
+            'item' => null,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
+            'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
             'estados' => Item::ESTADOS,
         ]);
     }
 
     public function store(StoreItemRequest $request)
     {
-        // codigo lo genera el modelo, foto se procesa aquí
-        $data = $request->safe()->except(['codigo', 'foto']);
+        // codigo lo genera el modelo
+        $data = $request->safe()->except(['codigo', 'foto', 'delete_foto']);
 
         if ($request->hasFile('foto')) {
             $data['foto_path'] = $request->file('foto')->store('items', 'public');
@@ -95,32 +102,35 @@ class ItemController extends Controller
 
         $item = Item::create($data);
 
+        // Movimiento: ALTA
         Movimiento::create([
             'item_id' => $item->id,
-            'tipo' => 'ALTA',
-            'estado_anterior' => null,
-            'estado_nuevo' => $item->estado,
-            'ubicacion_anterior_id' => null,
-            'ubicacion_nueva_id' => $item->ubicacion_id,
             'user_id' => Auth::id(),
-            'detalle' => 'Alta de item',
+            'tipo' => 'ALTA',
+            'de_estado' => null,
+            'a_estado' => $item->estado,
+            'de_ubicacion_id' => null,
+            'a_ubicacion_id' => $item->ubicacion_id,
+            'notas' => 'Alta de item',
+            'evidencia_path' => null,
+            'fecha' => now(),
         ]);
 
-        return redirect()->route('items.index')->with('ok', 'Item creado.');
+        return redirect()->route('items.index')->with('success', 'Item creado.');
     }
 
     public function show(Item $item)
     {
         $item->load([
             'ubicacion',
+            'categoriaRef',
             'movimientos.user',
-            'movimientos.ubicacionAnterior',
-            'movimientos.ubicacionNueva',
+            'movimientos.deUbicacion',
+            'movimientos.aUbicacion',
         ]);
 
         return view('items.show', [
             'item' => $item,
-            // ✅ NECESARIO para tu select en show.blade.php
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
         ]);
     }
@@ -130,6 +140,7 @@ class ItemController extends Controller
         return view('items.edit', [
             'item' => $item,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
+            'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
             'estados' => Item::ESTADOS,
         ]);
     }
@@ -138,44 +149,57 @@ class ItemController extends Controller
     {
         $data = $request->validated();
 
-        // Transición de estado
-        $toEstado = $data['estado'] ?? $item->estado;
-        if ($item->estado !== $toEstado && !Item::canTransition($item->estado, $toEstado)) {
-            return back()->withErrors([
-                'estado' => "No se permite cambiar de {$item->estado} a {$toEstado}.",
-            ])->withInput();
-        }
-
+        // Guardar antes para movimientos
         $beforeEstado = $item->estado;
         $beforeUbicacion = $item->ubicacion_id;
 
-        // Foto nueva (si viene)
+        // Validar transición de estado si cambió
+        $toEstado = $data['estado'] ?? $item->estado;
+        if ($beforeEstado !== $toEstado && !Item::canTransition($beforeEstado, $toEstado)) {
+            return back()->withErrors([
+                'estado' => "No se permite cambiar de {$beforeEstado} a {$toEstado}.",
+            ])->withInput();
+        }
+
+        // Eliminar foto guardada si se pidió
+        if (!empty($data['delete_foto'])) {
+            if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
+                Storage::disk('public')->delete($item->foto_path);
+            }
+            $data['foto_path'] = null;
+        }
+        unset($data['delete_foto']);
+
+        // Foto nueva (reemplaza)
         if ($request->hasFile('foto')) {
             if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
                 Storage::disk('public')->delete($item->foto_path);
             }
             $data['foto_path'] = $request->file('foto')->store('items', 'public');
         }
+        unset($data['foto']);
 
         $item->update($data);
 
         $changedEstado = $beforeEstado !== $item->estado;
-        $changedUbicacion = $beforeUbicacion !== $item->ubicacion_id;
+        $changedUbicacion = (string) $beforeUbicacion !== (string) $item->ubicacion_id;
 
         if ($changedEstado || $changedUbicacion) {
             Movimiento::create([
                 'item_id' => $item->id,
-                'tipo' => $changedEstado ? 'CAMBIO_ESTADO' : 'CAMBIO_UBICACION',
-                'estado_anterior' => $beforeEstado,
-                'estado_nuevo' => $item->estado,
-                'ubicacion_anterior_id' => $beforeUbicacion,
-                'ubicacion_nueva_id' => $item->ubicacion_id,
                 'user_id' => Auth::id(),
-                'detalle' => 'Actualización de item',
+                'tipo' => $changedEstado && $changedUbicacion ? 'AJUSTE' : ($changedEstado ? 'CAMBIO_ESTADO' : 'TRASLADO'),
+                'de_estado' => $beforeEstado,
+                'a_estado' => $item->estado,
+                'de_ubicacion_id' => $beforeUbicacion,
+                'a_ubicacion_id' => $item->ubicacion_id,
+                'notas' => 'Actualización de item',
+                'evidencia_path' => null,
+                'fecha' => now(),
             ]);
         }
 
-        return redirect()->route('items.show', $item)->with('ok', 'Item actualizado.');
+        return redirect()->route('items.show', $item)->with('success', 'Item actualizado.');
     }
 
     public function changeEstado(Request $request, $id)
@@ -184,36 +208,44 @@ class ItemController extends Controller
 
         $data = $request->validate([
             'estado' => ['required', Rule::in(Item::ESTADOS)],
-            'detalle' => ['nullable', 'string', 'max:500'],
+            'notas' => ['nullable', 'string', 'max:1000'],
+            'evidencia' => ['nullable', 'file', 'max:4096'],
         ]);
 
-        $toEstado = $data['estado'];
+        $from = $item->estado;
+        $to = $data['estado'];
 
-        if ($item->estado !== $toEstado && !Item::canTransition($item->estado, $toEstado)) {
+        if ($from !== $to && !Item::canTransition($from, $to)) {
             return back()->withErrors([
-                'estado' => "No se permite cambiar de {$item->estado} a {$toEstado}.",
+                'estado' => "No se permite cambiar de {$from} a {$to}.",
             ])->withInput();
         }
 
-        $beforeEstado = $item->estado;
-
-        if ($beforeEstado !== $toEstado) {
-            $item->estado = $toEstado;
-            $item->save();
-
-            Movimiento::create([
-                'item_id' => $item->id,
-                'tipo' => 'CAMBIO_ESTADO',
-                'estado_anterior' => $beforeEstado,
-                'estado_nuevo' => $toEstado,
-                'ubicacion_anterior_id' => $item->ubicacion_id,
-                'ubicacion_nueva_id' => $item->ubicacion_id,
-                'user_id' => Auth::id(),
-                'detalle' => $data['detalle'] ?? 'Cambio rápido de estado',
-            ]);
+        if ($from === $to) {
+            return back()->with('success', "Estado sin cambios ({$to}).");
         }
 
-        return back()->with('ok', "Estado actualizado a {$toEstado}.");
+        $evidenciaPath = null;
+        if ($request->hasFile('evidencia')) {
+            $evidenciaPath = $request->file('evidencia')->store('movimientos', 'public');
+        }
+
+        $item->update(['estado' => $to]);
+
+        Movimiento::create([
+            'item_id' => $item->id,
+            'user_id' => Auth::id(),
+            'tipo' => $to === 'BAJA' ? 'BAJA' : ($to === 'VENDIDO' ? 'VENTA' : 'CAMBIO_ESTADO'),
+            'de_estado' => $from,
+            'a_estado' => $to,
+            'de_ubicacion_id' => $item->ubicacion_id,
+            'a_ubicacion_id' => $item->ubicacion_id,
+            'notas' => $data['notas'] ?? 'Cambio de estado',
+            'evidencia_path' => $evidenciaPath,
+            'fecha' => now(),
+        ]);
+
+        return back()->with('success', "Estado actualizado a {$to}.");
     }
 
     public function moveUbicacion(Request $request, $id)
@@ -222,29 +254,38 @@ class ItemController extends Controller
 
         $data = $request->validate([
             'ubicacion_id' => ['nullable', 'exists:ubicaciones,id'],
-            'detalle' => ['nullable', 'string', 'max:500'],
+            'notas' => ['nullable', 'string', 'max:1000'],
+            'evidencia' => ['nullable', 'file', 'max:4096'],
         ]);
 
-        $beforeUbicacion = $item->ubicacion_id;
-        $toUbicacion = $data['ubicacion_id'] ?? null;
+        $fromU = $item->ubicacion_id;
+        $toU = $data['ubicacion_id'] ?? null;
 
-        if ((string) $beforeUbicacion !== (string) $toUbicacion) {
-            $item->ubicacion_id = $toUbicacion;
-            $item->save();
-
-            Movimiento::create([
-                'item_id' => $item->id,
-                'tipo' => 'CAMBIO_UBICACION',
-                'estado_anterior' => $item->estado,
-                'estado_nuevo' => $item->estado,
-                'ubicacion_anterior_id' => $beforeUbicacion,
-                'ubicacion_nueva_id' => $toUbicacion,
-                'user_id' => Auth::id(),
-                'detalle' => $data['detalle'] ?? 'Movimiento rápido de ubicación',
-            ]);
+        if ((string) $fromU === (string) $toU) {
+            return back()->with('success', 'Ubicación sin cambios.');
         }
 
-        return back()->with('ok', 'Ubicación actualizada.');
+        $evidenciaPath = null;
+        if ($request->hasFile('evidencia')) {
+            $evidenciaPath = $request->file('evidencia')->store('movimientos', 'public');
+        }
+
+        $item->update(['ubicacion_id' => $toU]);
+
+        Movimiento::create([
+            'item_id' => $item->id,
+            'user_id' => Auth::id(),
+            'tipo' => 'TRASLADO',
+            'de_estado' => $item->estado,
+            'a_estado' => $item->estado,
+            'de_ubicacion_id' => $fromU,
+            'a_ubicacion_id' => $toU,
+            'notas' => $data['notas'] ?? 'Movimiento de ubicación',
+            'evidencia_path' => $evidenciaPath,
+            'fecha' => now(),
+        ]);
+
+        return back()->with('success', 'Ubicación actualizada.');
     }
 
     public function trash(Request $request)
@@ -275,16 +316,18 @@ class ItemController extends Controller
 
         Movimiento::create([
             'item_id' => $item->id,
-            'tipo' => 'RESTAURAR',
-            'estado_anterior' => null,
-            'estado_nuevo' => $item->estado,
-            'ubicacion_anterior_id' => null,
-            'ubicacion_nueva_id' => $item->ubicacion_id,
             'user_id' => Auth::id(),
-            'detalle' => 'Item restaurado desde papelera',
+            'tipo' => 'RESTAURAR',
+            'de_estado' => null,
+            'a_estado' => $item->estado,
+            'de_ubicacion_id' => null,
+            'a_ubicacion_id' => $item->ubicacion_id,
+            'notas' => 'Item restaurado desde papelera',
+            'evidencia_path' => null,
+            'fecha' => now(),
         ]);
 
-        return redirect()->route('items.trash')->with('ok', 'Item restaurado.');
+        return redirect()->route('items.trash')->with('success', 'Item restaurado.');
     }
 
     public function forceDelete($id)
@@ -297,13 +340,13 @@ class ItemController extends Controller
 
         $item->forceDelete();
 
-        return redirect()->route('items.trash')->with('ok', 'Item eliminado permanentemente.');
+        return redirect()->route('items.trash')->with('success', 'Item eliminado permanentemente.');
     }
 
     public function destroy(Item $item)
     {
         $item->delete();
 
-        return redirect()->route('items.index')->with('ok', 'Item enviado a papelera.');
+        return redirect()->route('items.index')->with('success', 'Item enviado a papelera.');
     }
 }

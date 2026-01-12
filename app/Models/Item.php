@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Item extends Model
 {
@@ -27,24 +27,27 @@ class Item extends Model
         'serie',
         'marca',
         'modelo',
+
+        // Legacy temporal (mientras migras y luego lo eliminas)
         'categoria',
+
+        // ✅ Catálogo
+        'categoria_id',
+
         'estado',
         'ubicacion_id',
         'notas',
-        'foto_path', // ✅ NUEVO
+        'foto_path',
     ];
 
     protected static function booted(): void
     {
         static::creating(function (Item $item) {
-            // Si ya viene código manual, respeta
             if (!empty($item->codigo)) {
                 return;
             }
 
-            // Requiere columna codigo_seq en DB
             $max = (int) (self::max('codigo_seq') ?? 0);
-
             $item->codigo_seq = $max + 1;
             $item->codigo = 'ITM-' . str_pad((string) $item->codigo_seq, 6, '0', STR_PAD_LEFT);
         });
@@ -68,14 +71,25 @@ class Item extends Model
         return $this->belongsTo(Ubicacion::class);
     }
 
+    // ✅ Relación con catálogo de categorías (nombre distinto para no chocar con el campo legacy)
+    public function categoriaRef(): BelongsTo
+    {
+        return $this->belongsTo(Categoria::class, 'categoria_id');
+    }
+
     public function movimientos(): HasMany
     {
+        // ✅ Si Movimiento tiene global scope latest_first (created_at desc, id desc),
+        // aquí NO ordenes otra vez.
         return $this->hasMany(Movimiento::class);
     }
 
-    public function fotoUrl(): ?string
+    // ✅ Accesor: úsalo como $item->foto_url
+    public function getFotoUrlAttribute(): string
     {
-        return $this->foto_path ? asset('storage/' . $this->foto_path) : null;
+        return $this->foto_path
+            ? asset('storage/' . $this->foto_path)
+            : asset('images/item-placeholder.png');
     }
 
     public function getActivitylogOptions(): LogOptions

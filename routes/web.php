@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\CategoriaController;
 
 Route::get('/', fn () => redirect()->route('dashboard'));
 
@@ -19,6 +20,9 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Categorías - CRUD
+    Route::resource('categorias', CategoriaController::class)->except(['show']);
+
     // Items - Papelera
     Route::get('items-trash', [ItemController::class, 'trash'])->name('items.trash');
     Route::post('items/{id}/restore', [ItemController::class, 'restore'])->name('items.restore');
@@ -32,4 +36,8 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('items', ItemController::class);
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';
+
+use App\Http\Controllers\UbicacionController;
+
+Route::resource('ubicaciones', UbicacionController::class)->except(['show']);

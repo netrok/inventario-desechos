@@ -1,5 +1,3 @@
-@csrf
-
 @php
     $isEdit = isset($item) && $item?->exists;
 @endphp
@@ -69,16 +67,37 @@
                 @error('modelo') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Categoría --}}
+            {{-- Categoría (catálogo) --}}
             <div class="md:col-span-2">
                 <label class="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
-                <input
-                    name="categoria"
-                    value="{{ old('categoria', $item->categoria ?? '') }}"
-                    placeholder="Ej. Laptop, Impresora, Monitor, Accesorio"
-                    class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('categoria') border-rose-300 ring-rose-200 @enderror"
-                >
-                @error('categoria') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+
+                @if(isset($categorias) && $categorias?->count())
+                    <select
+                        name="categoria_id"
+                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('categoria_id') border-rose-300 ring-rose-200 @enderror"
+                    >
+                        <option value="">— Selecciona —</option>
+                        @foreach($categorias as $c)
+                            <option value="{{ $c->id }}"
+                                @selected((string)old('categoria_id', $item->categoria_id ?? '') === (string)$c->id)>
+                                {{ $c->nombre }}
+                            </option>
+                        @endforeach
+                    </select>
+                @else
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                        No hay categorías cargadas. Crea categorías o ejecuta la migración/command.
+                    </div>
+                @endif
+
+                @error('categoria_id') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+
+                {{-- Mensaje legacy opcional --}}
+                @if(isset($item) && empty($item->categoria_id) && !empty($item->categoria))
+                    <div class="mt-1 text-xs text-amber-600">
+                        Legacy detectado: "{{ $item->categoria }}" (aún no mapeado).
+                    </div>
+                @endif
             </div>
         </div>
     </div>
@@ -134,4 +153,79 @@
         </div>
     </div>
 
+    {{-- Sección: Foto --}}
+    <div>
+        <h3 class="text-sm font-semibold text-gray-900">Foto</h3>
+        <p class="text-xs text-gray-500 mt-1">Sube una imagen para identificar el equipo.</p>
+
+        <div class="mt-4 flex flex-col md:flex-row gap-4">
+            <img
+                id="fotoPreview"
+                src="{{ isset($item) ? $item->foto_url : asset('images/item-placeholder.png') }}"
+                class="h-28 w-28 rounded-xl border border-gray-200 object-cover bg-gray-50"
+                alt="Preview"
+            >
+
+            <div class="flex-1">
+                <input
+                    type="file"
+                    name="foto"
+                    id="fotoInput"
+                    accept="image/*"
+                    class="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-gray-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-gray-800
+                           rounded-lg border border-gray-300 focus:border-gray-900 focus:ring-gray-900
+                           @error('foto') border-rose-300 ring-rose-200 @enderror"
+                >
+                @error('foto') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        id="btnQuitarFoto"
+                        class="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                        Quitar preview
+                    </button>
+
+                    @if(isset($item) && $item->foto_path)
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                                type="checkbox"
+                                value="1"
+                                name="delete_foto"
+                                id="deleteFoto"
+                                class="rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                            >
+                            Eliminar foto guardada
+                        </label>
+                    @endif
+
+                    <span class="text-xs text-gray-500">JPG/PNG/WEBP, máx 2MB.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+<script>
+(() => {
+  const input = document.getElementById('fotoInput');
+  const img = document.getElementById('fotoPreview');
+  const btn = document.getElementById('btnQuitarFoto');
+  const placeholder = @json(asset('images/item-placeholder.png'));
+
+  if (!input || !img || !btn) return;
+
+  input.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    img.src = URL.createObjectURL(f);
+  });
+
+  btn.addEventListener('click', () => {
+    input.value = '';
+    img.src = placeholder;
+  });
+})();
+</script>

@@ -9,10 +9,9 @@ return new class extends Migration {
     {
         Schema::create('ubicaciones', function (Blueprint $table) {
             $table->id();
-            $table->string('nombre', 120)->unique();
-            $table->string('codigo', 30)->unique()->nullable(); // ej: ALM-GDL-01
+            $table->string('nombre')->unique();
             $table->text('descripcion')->nullable();
-            $table->boolean('activa')->default(true);
+            $table->boolean('activo')->default(true);
             $table->timestamps();
         });
     }
