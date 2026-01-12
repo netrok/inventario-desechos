@@ -13,8 +13,7 @@ Route::get('/', fn () => redirect()->route('dashboard'));
 Route::middleware(['auth'])->group(function () {
 
     // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'index'])
-        ->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // Perfil
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -34,7 +33,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Items - Acciones rápidas
     Route::post('items/{id}/estado', [ItemController::class, 'changeEstado'])->name('items.changeEstado');
-    Route::post('items/{id}/mover',  [ItemController::class, 'moveUbicacion'])->name('items.moveUbicacion');
+    Route::post('items/{id}/mover', [ItemController::class, 'moveUbicacion'])->name('items.moveUbicacion');
 
     // Items - CRUD
     Route::resource('items', ItemController::class);

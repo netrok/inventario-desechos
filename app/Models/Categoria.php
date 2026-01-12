@@ -7,10 +7,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Categoria extends Model
 {
-    protected $fillable = ['nombre','activo'];
+    protected $table = 'categorias';
+
+    protected $fillable = [
+        'nombre',
+        'activo',
+    ];
+
+    protected $casts = [
+        'activo' => 'boolean',
+    ];
 
     public function items(): HasMany
     {
-        return $this->hasMany(Item::class);
+        return $this->hasMany(\App\Models\Item::class, 'categoria_id');
     }
 }
