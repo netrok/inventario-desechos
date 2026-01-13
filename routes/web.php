@@ -26,6 +26,15 @@ Route::middleware(['auth'])->group(function () {
     // Ubicaciones
     Route::resource('ubicaciones', UbicacionController::class)->except(['show']);
 
+    // Items - Export
+    Route::get('items/export/xlsx', [ItemController::class, 'exportXlsx'])
+        ->name('items.export.xlsx')
+        ->middleware('permission:items.ver');
+
+    Route::get('items/export/pdf', [ItemController::class, 'exportPdf'])
+        ->name('items.export.pdf')
+        ->middleware('permission:items.ver');
+
     // Items - Papelera
     Route::get('items-trash', [ItemController::class, 'trash'])->name('items.trash');
     Route::post('items/{id}/restore', [ItemController::class, 'restore'])->name('items.restore');
