@@ -64,7 +64,7 @@ class ItemController extends Controller
      */
     private function baseQuery(array $filters): Builder
     {
-        $q = (string)($filters['q'] ?? '');
+        $q = (string) ($filters['q'] ?? '');
         $estado = $filters['estado'] ?? null;
         $ubicacionId = $filters['ubicacion_id'] ?? null;
         $categoriaId = $filters['categoria_id'] ?? null;
@@ -249,11 +249,9 @@ class ItemController extends Controller
             $data['foto_path'] = null;
         }
 
-        // Foto: nueva (reemplaza)
-        $data['foto_path'] = $this->storeFotoIfPresent(
-            $request,
-            $data['foto_path'] ?? $item->foto_path
-        );
+        // Foto: nueva (reemplaza). Si no hay foto nueva, conserva lo actual / lo que quede.
+        $currentPath = array_key_exists('foto_path', $data) ? $data['foto_path'] : $item->foto_path;
+        $data['foto_path'] = $this->storeFotoIfPresent($request, $currentPath);
 
         unset($data['foto'], $data['delete_foto']);
 
@@ -450,7 +448,7 @@ class ItemController extends Controller
 
         $pdf = Pdf::loadView('items.pdf', [
                 'items' => $items,
-                'filters' => $filters, // incluye *_name para chips
+                'filters' => $filters,
                 'generatedAt' => now(),
             ])
             ->setPaper('a4', 'landscape')

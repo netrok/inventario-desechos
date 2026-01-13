@@ -12,6 +12,13 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    public function __construct()
+    {
+        // Si tu ruta ya está protegida con role:Admin en routes/admin.php, esto es extra-seguro.
+        // Recomendado: permiso específico para gestionar usuarios.
+        $this->middleware('permission:usuarios.gestionar');
+    }
+
     public function index(Request $request)
     {
         $q = trim((string) $request->query('q', ''));
@@ -51,12 +58,11 @@ class UserController extends Controller
             'password' => Hash::make($data['password']),
         ]);
 
-        $roles = $data['roles'] ?? [];
-        $user->syncRoles($roles);
+        $user->syncRoles($data['roles'] ?? []);
 
         return redirect()
             ->route('admin.users.index')
-            ->with('status', 'Usuario creado.');
+            ->with('success', 'Usuario creado.');
     }
 
     public function edit(User $user)
@@ -81,23 +87,21 @@ class UserController extends Controller
         }
 
         $user->save();
-
-        $roles = $data['roles'] ?? [];
-        $user->syncRoles($roles);
+        $user->syncRoles($data['roles'] ?? []);
 
         return redirect()
             ->route('admin.users.index')
-            ->with('status', 'Usuario actualizado.');
+            ->with('success', 'Usuario actualizado.');
     }
 
     public function destroy(User $user)
     {
-        // Regla simple: no te permitas borrarte a ti mismo
+        // No te borres a ti mismo
         if (auth()->id() === $user->id) {
             return back()->with('error', 'No puedes eliminar tu propio usuario.');
         }
 
-        // Regla: no permitir borrar el último Admin
+        // No borrar el último Admin
         if ($user->hasRole('Admin')) {
             $adminsCount = User::role('Admin')->count();
             if ($adminsCount <= 1) {
@@ -109,6 +113,6 @@ class UserController extends Controller
 
         return redirect()
             ->route('admin.users.index')
-            ->with('status', 'Usuario eliminado.');
+            ->with('success', 'Usuario eliminado.');
     }
 }

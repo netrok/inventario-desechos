@@ -25,8 +25,8 @@ class UbicacionController extends Controller
 
         $ubicaciones = Ubicacion::query()
             ->when($q !== '', fn ($qq) => $qq->where('nombre', 'ilike', "%{$q}%"))
-            ->withCount('items')               // ✅ requerido para items_count en la vista
-            ->orderBy('nombre')                // (o ->orderByDesc('items_count')->orderBy('nombre'))
+            ->withCount('items') // items_count para la vista
+            ->orderBy('nombre')
             ->paginate(15)
             ->withQueryString();
 
@@ -42,7 +42,7 @@ class UbicacionController extends Controller
     {
         $data = $request->validated();
 
-        // ✅ Solo si la columna existe (por si en dev hiciste migraciones raras)
+        // Si existe la columna "activo", la respetamos; si no, no inventamos.
         if (Schema::hasColumn('ubicaciones', 'activo')) {
             $data['activo'] = (bool) $request->boolean('activo');
         }
@@ -51,7 +51,7 @@ class UbicacionController extends Controller
 
         return redirect()
             ->route('ubicaciones.index')
-            ->with('ok', 'Ubicación creada.');
+            ->with('success', 'Ubicación creada.');
     }
 
     public function edit(Ubicacion $ubicacion)
@@ -71,7 +71,7 @@ class UbicacionController extends Controller
 
         return redirect()
             ->route('ubicaciones.index')
-            ->with('ok', 'Ubicación actualizada.');
+            ->with('success', 'Ubicación actualizada.');
     }
 
     public function destroy(Ubicacion $ubicacion)
@@ -85,7 +85,7 @@ class UbicacionController extends Controller
 
             return redirect()
                 ->route('ubicaciones.index')
-                ->with('ok', 'Ubicación eliminada.');
+                ->with('success', 'Ubicación eliminada.');
         });
     }
 }

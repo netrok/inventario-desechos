@@ -4,15 +4,27 @@ namespace App\Http\Controllers;
 
 use App\Models\Categoria;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CategoriaController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('permission:categorias.ver')->only(['index']);
+        $this->middleware('permission:categorias.crear')->only(['create', 'store']);
+        $this->middleware('permission:categorias.editar')->only(['edit', 'update']);
+        $this->middleware('permission:categorias.eliminar')->only(['destroy']);
+    }
+
     public function index(Request $request)
     {
-        $q = trim((string)$request->get('q',''));
+        $q = trim((string) $request->get('q', ''));
 
         $categorias = Categoria::query()
-            ->when($q !== '', fn($qq) => $qq->where('nombre', 'like', "%{$q}%"))
+            ->when($q !== '', function ($qq) use ($q) {
+                // Postgres friendly (case-insensitive)
+                $qq->where('nombre', 'ilike', "%{$q}%");
+            })
             ->orderBy('nombre')
             ->paginate(12)
             ->withQueryString();
@@ -28,11 +40,12 @@ class CategoriaController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'nombre' => ['required','string','max:80','unique:categorias,nombre'],
-            'activo' => ['nullable','boolean'],
+            'nombre' => ['required', 'string', 'max:80', 'unique:categorias,nombre'],
+            'activo' => ['nullable', 'boolean'],
         ]);
 
-        $data['activo'] = (bool)($data['activo'] ?? true);
+        // checkbox: si no viene, default true en alta
+        $data['activo'] = (bool) ($request->input('activo', true));
 
         Categoria::create($data);
 
@@ -49,13 +62,19 @@ class CategoriaController extends Controller
     public function update(Request $request, Categoria $categoria)
     {
         $data = $request->validate([
-            'nombre' => ['required','string','max:80','unique:categorias,nombre,' . $categoria->id],
-            'activo' => ['nullable','boolean'],
+            'nombre' => [
+                'required',
+                'string',
+                'max:80',
+                Rule::unique('categorias', 'nombre')->ignore($categoria->id),
+            ],
+            'activo' => ['nullable', 'boolean'],
         ]);
 
         $categoria->update([
             'nombre' => $data['nombre'],
-            'activo' => (bool)($data['activo'] ?? false),
+            // checkbox: si no viene, se considera false
+            'activo' => (bool) $request->boolean('activo'),
         ]);
 
         return redirect()
@@ -65,7 +84,7 @@ class CategoriaController extends Controller
 
     public function destroy(Categoria $categoria)
     {
-        // Evitar borrar si tiene items (conservador y seguro)
+        // Conservador y seguro: no borrar si está en uso
         if ($categoria->items()->exists()) {
             return back()->with('error', 'No se puede eliminar: hay items asignados a esta categoría.');
         }
