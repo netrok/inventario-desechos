@@ -20,13 +20,25 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Categorías
-    Route::resource('categorias', CategoriaController::class)->except(['show']);
+    /**
+     * =========================
+     * Catálogos
+     * =========================
+     */
+    Route::middleware('permission:categorias.ver')->group(function () {
+        Route::resource('categorias', CategoriaController::class)->except(['show']);
+    });
 
-    // Ubicaciones
-    Route::resource('ubicaciones', UbicacionController::class)->except(['show']);
+    Route::middleware('permission:ubicaciones.ver')->group(function () {
+        Route::resource('ubicaciones', UbicacionController::class)->except(['show']);
+    });
 
-    // Items - Export
+    /**
+     * =========================
+     * Items
+     * =========================
+     */
+    // Export (solo ver)
     Route::get('items/export/xlsx', [ItemController::class, 'exportXlsx'])
         ->name('items.export.xlsx')
         ->middleware('permission:items.ver');
@@ -35,17 +47,57 @@ Route::middleware(['auth'])->group(function () {
         ->name('items.export.pdf')
         ->middleware('permission:items.ver');
 
-    // Items - Papelera
-    Route::get('items-trash', [ItemController::class, 'trash'])->name('items.trash');
-    Route::post('items/{id}/restore', [ItemController::class, 'restore'])->name('items.restore');
-    Route::delete('items/{id}/force', [ItemController::class, 'forceDelete'])->name('items.forceDelete');
+    // Papelera (más sensible)
+    Route::get('items-trash', [ItemController::class, 'trash'])
+        ->name('items.trash')
+        ->middleware('permission:items.eliminar');
 
-    // Items - Acciones rápidas
-    Route::post('items/{id}/estado', [ItemController::class, 'changeEstado'])->name('items.changeEstado');
-    Route::post('items/{id}/mover', [ItemController::class, 'moveUbicacion'])->name('items.moveUbicacion');
+    Route::post('items/{id}/restore', [ItemController::class, 'restore'])
+        ->name('items.restore')
+        ->middleware('permission:items.eliminar');
 
-    // Items - CRUD
-    Route::resource('items', ItemController::class);
+    Route::delete('items/{id}/force', [ItemController::class, 'forceDelete'])
+        ->name('items.forceDelete')
+        ->middleware('permission:items.eliminar');
+
+    // Acciones rápidas (editar)
+    Route::post('items/{id}/estado', [ItemController::class, 'changeEstado'])
+        ->name('items.changeEstado')
+        ->middleware('permission:items.editar');
+
+    Route::post('items/{id}/mover', [ItemController::class, 'moveUbicacion'])
+        ->name('items.moveUbicacion')
+        ->middleware('permission:items.editar');
+
+    // CRUD principal (separa por permisos por acción)
+    Route::get('items', [ItemController::class, 'index'])
+        ->name('items.index')
+        ->middleware('permission:items.ver');
+
+    Route::get('items/create', [ItemController::class, 'create'])
+        ->name('items.create')
+        ->middleware('permission:items.crear');
+
+    Route::post('items', [ItemController::class, 'store'])
+        ->name('items.store')
+        ->middleware('permission:items.crear');
+
+    Route::get('items/{item}', [ItemController::class, 'show'])
+        ->name('items.show')
+        ->middleware('permission:items.ver');
+
+    Route::get('items/{item}/edit', [ItemController::class, 'edit'])
+        ->name('items.edit')
+        ->middleware('permission:items.editar');
+
+    Route::put('items/{item}', [ItemController::class, 'update'])
+        ->name('items.update')
+        ->middleware('permission:items.editar');
+
+    Route::delete('items/{item}', [ItemController::class, 'destroy'])
+        ->name('items.destroy')
+        ->middleware('permission:items.eliminar');
 });
 
 require __DIR__ . '/auth.php';
+require __DIR__ . '/admin.php';

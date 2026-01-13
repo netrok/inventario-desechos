@@ -1,4 +1,6 @@
-<nav x-data="{ open: false }" class="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
+<nav x-data="{ open: false }"
+     class="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
+
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 items-center justify-between">
             {{-- Left --}}
@@ -43,6 +45,14 @@
                        class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('ubicaciones.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                         Ubicaciones
                     </a>
+
+                    {{-- Admin --}}
+                    @role('Admin')
+                        <a href="{{ route('admin.users.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Admin / Usuarios
+                        </a>
+                    @endrole
                 </div>
             </div>
 
@@ -103,10 +113,11 @@
             {{-- Mobile button --}}
             <div class="sm:hidden">
                 <button @click="open = !open"
-                        class="inline-flex items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-gray-100">
+                        class="inline-flex items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+                        aria-label="Abrir menú">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path :class="{'hidden': open}" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                        <path :class="{'hidden': !open}" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        <path :class="{ 'hidden': open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                        <path :class="{ 'hidden': !open }" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
             </div>
@@ -114,7 +125,10 @@
     </div>
 
     {{-- Mobile menu --}}
-    <div x-show="open" class="sm:hidden border-t border-gray-200 bg-white">
+    <div x-cloak
+         x-show="open"
+         x-transition
+         class="sm:hidden border-t border-gray-200 bg-white">
         <div class="px-4 py-3 space-y-1">
             <a href="{{ route('dashboard') }}"
                class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('dashboard') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
@@ -140,6 +154,14 @@
                class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('ubicaciones.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                 Ubicaciones
             </a>
+
+            {{-- Admin --}}
+            @role('Admin')
+                <a href="{{ route('admin.users.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Admin / Usuarios
+                </a>
+            @endrole
 
             {{-- Botón contextual --}}
             @if(request()->routeIs('items.*') && !request()->routeIs('items.trash'))

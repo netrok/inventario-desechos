@@ -13,13 +13,23 @@ class RolesAndAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        // ✅ Limpia cache de Spatie (OBLIGATORIO cuando seeds/permisos cambian)
+        // Limpia cache de Spatie (OBLIGATORIO cuando cambias permisos/roles)
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $guard = 'web';
 
-        // 1) Roles
-        $roles = ['Admin', 'Almacen', 'Ventas', 'Auditor'];
+        /**
+         * Roles
+         */
+        $roles = [
+            'Admin',
+            'Almacen',
+            'Ventas',
+            'Auditor',
+            // si quieres conservar estos del segundo seeder, déjalos:
+            'Operador',
+            'Consulta',
+        ];
 
         foreach ($roles as $r) {
             Role::firstOrCreate([
@@ -28,7 +38,9 @@ class RolesAndAdminSeeder extends Seeder
             ]);
         }
 
-        // 2) Permisos
+        /**
+         * Permisos
+         */
         $perms = [
             // Dashboard
             'dashboard.ver',
@@ -38,6 +50,8 @@ class RolesAndAdminSeeder extends Seeder
             'items.crear',
             'items.editar',
             'items.eliminar',
+
+            // Acciones extra (si las usas en rutas/middlewares)
             'items.papelera',
             'items.restaurar',
             'items.borrar_definitivo',
@@ -59,14 +73,18 @@ class RolesAndAdminSeeder extends Seeder
             'ubicaciones.editar',
             'ubicaciones.eliminar',
 
-            // (Opcional) catálogos genéricos
+            // Catálogos genéricos (opcional)
             'catalogos.ver',
             'catalogos.editar',
 
-            // (Opcional) usuarios
-            'usuarios.gestionar',
+            // Usuarios / Admin (opcional pero recomendado)
+            'usuarios.ver',
+            'usuarios.crear',
+            'usuarios.editar',
+            'usuarios.eliminar',
+            'usuarios.roles',
 
-            // (Opcional) ventas
+            // Ventas (opcional)
             'ventas.ver',
             'ventas.crear',
             'ventas.cerrar',
@@ -79,13 +97,15 @@ class RolesAndAdminSeeder extends Seeder
             ]);
         }
 
-        // 3) Obtener roles (ya creados)
-        $adminRole   = Role::firstWhere(['name' => 'Admin',   'guard_name' => $guard]);
-        $almacenRole = Role::firstWhere(['name' => 'Almacen', 'guard_name' => $guard]);
-        $ventasRole  = Role::firstWhere(['name' => 'Ventas',  'guard_name' => $guard]);
-        $auditorRole = Role::firstWhere(['name' => 'Auditor', 'guard_name' => $guard]);
+        /**
+         * Asignación de permisos por rol
+         */
+        $adminRole   = Role::where('name', 'Admin')->where('guard_name', $guard)->firstOrFail();
+        $almacenRole = Role::where('name', 'Almacen')->where('guard_name', $guard)->firstOrFail();
+        $ventasRole  = Role::where('name', 'Ventas')->where('guard_name', $guard)->firstOrFail();
+        $auditorRole = Role::where('name', 'Auditor')->where('guard_name', $guard)->firstOrFail();
 
-        // Admin = TODO
+        // Admin = todo
         $adminRole->syncPermissions($perms);
 
         // Almacén
@@ -111,7 +131,7 @@ class RolesAndAdminSeeder extends Seeder
             'ubicaciones.ver',
         ]);
 
-        // Auditor
+        // Auditor (solo lectura)
         $auditorRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
@@ -123,18 +143,23 @@ class RolesAndAdminSeeder extends Seeder
             'ventas.ver',
         ]);
 
-        // 4) Usuario Admin
+        /**
+         * Usuario Admin (elige UN correo y UNA contraseña)
+         */
+        $adminEmail = 'admin@desechos.test'; // o 'admin@gv.com.mx' si ya lo usas en prod/dev
+        $adminPass  = 'Admin123*';           // cámbiala luego en cuanto entres
+
         $admin = User::firstOrCreate(
-            ['email' => 'admin@desechos.test'],
+            ['email' => $adminEmail],
             [
                 'name'     => 'Admin',
-                'password' => Hash::make('Admin123*'),
+                'password' => Hash::make($adminPass),
             ]
         );
 
-        $admin->syncRoles([$adminRole]);
+        $admin->syncRoles(['Admin']);
 
-        // ✅ Limpia cache al final (útil en dev)
+        // Limpia cache al final (útil en dev)
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }
