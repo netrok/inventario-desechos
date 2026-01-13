@@ -29,13 +29,7 @@ class Item extends Model
         'serie',
         'marca',
         'modelo',
-
-        // Legacy temporal (si aún lo usas en UI)
-        'categoria',
-
-        // FK catálogo
         'categoria_id',
-
         'estado',
         'ubicacion_id',
         'notas',
@@ -43,7 +37,7 @@ class Item extends Model
     ];
 
     protected $casts = [
-        'codigo_seq' => 'integer',
+        'codigo_seq'   => 'integer',
         'categoria_id' => 'integer',
         'ubicacion_id' => 'integer',
     ];
@@ -55,8 +49,6 @@ class Item extends Model
                 return;
             }
 
-            // ✅ En PostgreSQL evita duplicados con lock de tabla (simple y efectivo)
-            // Nota: esto corre dentro del insert; si quieres ultra-pro, usa sequence nativa.
             $next = DB::transaction(function () {
                 DB::statement('LOCK TABLE items IN EXCLUSIVE MODE');
                 return (int) (DB::table('items')->max('codigo_seq') ?? 0) + 1;
@@ -82,21 +74,19 @@ class Item extends Model
 
     public function ubicacion(): BelongsTo
     {
-        return $this->belongsTo(Ubicacion::class);
+        return $this->belongsTo(Ubicacion::class, 'ubicacion_id');
     }
 
-    // ✅ Relación catálogo (nombre distinto para no chocar con campo legacy)
-    public function categoriaRef(): BelongsTo
+    public function categoria(): BelongsTo
     {
         return $this->belongsTo(Categoria::class, 'categoria_id');
     }
 
     public function movimientos(): HasMany
     {
-        return $this->hasMany(Movimiento::class);
+        return $this->hasMany(Movimiento::class, 'item_id');
     }
 
-    // ✅ Accesor: $item->foto_url
     public function getFotoUrlAttribute(): string
     {
         if ($this->foto_path && Storage::disk('public')->exists($this->foto_path)) {

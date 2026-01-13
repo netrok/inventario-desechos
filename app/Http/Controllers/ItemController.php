@@ -39,7 +39,7 @@ class ItemController extends Controller
         $categoriaId = $request->get('categoria_id') ?: null;
 
         $base = Item::query()
-            ->with(['ubicacion', 'categoriaRef'])
+            ->with(['ubicacion', 'categoria'])
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->where(function ($w) use ($q) {
                     $w->where('codigo', 'ilike', "%{$q}%")
@@ -66,7 +66,6 @@ class ItemController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        // Categorías: por si tu tabla no tiene 'activo' aún
         $categoriasQuery = Categoria::query()->orderBy('nombre');
         if (Schema::hasColumn('categorias', 'activo')) {
             $categoriasQuery->where('activo', true);
@@ -105,13 +104,14 @@ class ItemController extends Controller
 
     public function store(StoreItemRequest $request)
     {
-        // ✅ Usa validated() para asegurar que categoria_id / ubicacion_id entren
         $data = $request->validated();
 
-        // codigo lo genera el modelo (si te llega, lo ignoras)
-        unset($data['codigo']);
+        // El modelo genera codigo/codigo_seq, no permitas que te lo pisen
+        unset($data['codigo'], $data['codigo_seq']);
 
-        // ✅ Foto solo si existe columna
+        // Ya no existe columna legacy "categoria"
+        unset($data['categoria']);
+
         if ($request->hasFile('foto') && Schema::hasColumn('items', 'foto_path')) {
             $data['foto_path'] = $request->file('foto')->store('items', 'public');
         }
@@ -139,7 +139,7 @@ class ItemController extends Controller
     {
         $item->load([
             'ubicacion',
-            'categoriaRef',
+            'categoria',
             'movimientos.user',
             'movimientos.deUbicacion',
             'movimientos.aUbicacion',
@@ -181,7 +181,13 @@ class ItemController extends Controller
             ])->withInput();
         }
 
-        // ✅ Borrar foto
+        // No permitas que te pisen el código
+        unset($data['codigo'], $data['codigo_seq']);
+
+        // Ya no existe columna legacy "categoria"
+        unset($data['categoria']);
+
+        // Borrar foto
         if ($data['delete_foto'] && Schema::hasColumn('items', 'foto_path')) {
             if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
                 Storage::disk('public')->delete($item->foto_path);
@@ -190,7 +196,7 @@ class ItemController extends Controller
         }
         unset($data['delete_foto']);
 
-        // ✅ Foto nueva (reemplaza)
+        // Foto nueva (reemplaza)
         if ($request->hasFile('foto') && Schema::hasColumn('items', 'foto_path')) {
             if ($item->foto_path && Storage::disk('public')->exists($item->foto_path)) {
                 Storage::disk('public')->delete($item->foto_path);
@@ -198,9 +204,6 @@ class ItemController extends Controller
             $data['foto_path'] = $request->file('foto')->store('items', 'public');
         }
         unset($data['foto']);
-
-        // codigo no se toca aquí (a menos que tú lo permitas)
-        unset($data['codigo']);
 
         $item->update($data);
 
@@ -211,7 +214,9 @@ class ItemController extends Controller
             Movimiento::create([
                 'item_id' => $item->id,
                 'user_id' => Auth::id(),
-                'tipo' => $changedEstado && $changedUbicacion ? 'AJUSTE' : ($changedEstado ? 'CAMBIO_ESTADO' : 'TRASLADO'),
+                'tipo' => $changedEstado && $changedUbicacion
+                    ? 'AJUSTE'
+                    : ($changedEstado ? 'CAMBIO_ESTADO' : 'TRASLADO'),
                 'de_estado' => $beforeEstado,
                 'a_estado' => $item->estado,
                 'de_ubicacion_id' => $beforeUbicacion,

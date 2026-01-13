@@ -10,13 +10,13 @@ class UpdateItemRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; // ya controlas por permisos en middleware
+        return true; // permisos ya en middleware
     }
 
     public function rules(): array
     {
         /** @var \App\Models\Item|mixed $item */
-        $item = $this->route('item'); // normalmente es Item por route model binding
+        $item = $this->route('item');
         $id = $item instanceof Item ? $item->id : $item;
 
         return [
@@ -26,12 +26,9 @@ class UpdateItemRequest extends FormRequest
             'marca'  => ['nullable', 'string', 'max:80'],
             'modelo' => ['nullable', 'string', 'max:120'],
 
-            // Legacy temporal (si todavía existe)
-            'categoria' => ['nullable', 'string', 'max:80'],
-
             // ✅ Catálogo real
-            'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
-            'ubicacion_id' => ['nullable', 'integer', 'exists:ubicaciones,id'],
+            'categoria_id' => ['required', 'integer', 'exists:categorias,id'],
+            'ubicacion_id' => ['required', 'integer', 'exists:ubicaciones,id'],
 
             'estado' => ['required', Rule::in(Item::ESTADOS)],
 
@@ -49,7 +46,9 @@ class UpdateItemRequest extends FormRequest
     {
         return [
             'estado.in' => 'El estado seleccionado no es válido.',
+            'categoria_id.required' => 'Selecciona una categoría.',
             'categoria_id.exists' => 'La categoría seleccionada no existe.',
+            'ubicacion_id.required' => 'Selecciona una ubicación.',
             'ubicacion_id.exists' => 'La ubicación seleccionada no existe.',
             'foto.image' => 'El archivo debe ser una imagen.',
         ];

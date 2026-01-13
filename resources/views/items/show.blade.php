@@ -10,7 +10,7 @@
 
                         @php
                             $estado = $item->estado ?? 'DISPONIBLE';
-                            $badge = match($estado) {
+                            $badge = match ($estado) {
                                 'DISPONIBLE' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
                                 'RESERVADO'  => 'bg-amber-50 text-amber-700 border-amber-200',
                                 'REPARACION', 'REPARACIÓN' => 'bg-sky-50 text-sky-700 border-sky-200',
@@ -123,10 +123,11 @@
                                     </dd>
                                 </div>
 
+                                {{-- ✅ FIX: ya no existe categoriaRef ni columna legacy categoria --}}
                                 <div class="rounded-xl bg-gray-50 border border-gray-100 p-4">
                                     <dt class="text-xs font-medium text-gray-500">Categoría</dt>
                                     <dd class="mt-1 text-sm font-semibold text-gray-900">
-                                        {{ $item->categoriaRef?->nombre ?? ($item->categoria ?: '—') }}
+                                        {{ $item->categoria?->nombre ?? '—' }}
                                     </dd>
                                 </div>
 
