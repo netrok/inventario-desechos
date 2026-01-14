@@ -47,7 +47,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('items.export.pdf')
         ->middleware('permission:items.ver');
 
-    // Papelera (más sensible)
+    // Papelera
     Route::get('items-trash', [ItemController::class, 'trash'])
         ->name('items.trash')
         ->middleware('permission:items.eliminar');
@@ -69,34 +69,14 @@ Route::middleware(['auth'])->group(function () {
         ->name('items.moveUbicacion')
         ->middleware('permission:items.editar');
 
-    // CRUD principal (separa por permisos por acción)
-    Route::get('items', [ItemController::class, 'index'])
-        ->name('items.index')
-        ->middleware('permission:items.ver');
-
-    Route::get('items/create', [ItemController::class, 'create'])
-        ->name('items.create')
-        ->middleware('permission:items.crear');
-
-    Route::post('items', [ItemController::class, 'store'])
-        ->name('items.store')
-        ->middleware('permission:items.crear');
-
-    Route::get('items/{item}', [ItemController::class, 'show'])
-        ->name('items.show')
-        ->middleware('permission:items.ver');
-
-    Route::get('items/{item}/edit', [ItemController::class, 'edit'])
-        ->name('items.edit')
-        ->middleware('permission:items.editar');
-
-    Route::put('items/{item}', [ItemController::class, 'update'])
-        ->name('items.update')
-        ->middleware('permission:items.editar');
-
-    Route::delete('items/{item}', [ItemController::class, 'destroy'])
-        ->name('items.destroy')
-        ->middleware('permission:items.eliminar');
+    // CRUD principal
+    Route::get('items', [ItemController::class, 'index'])->name('items.index')->middleware('permission:items.ver');
+    Route::get('items/create', [ItemController::class, 'create'])->name('items.create')->middleware('permission:items.crear');
+    Route::post('items', [ItemController::class, 'store'])->name('items.store')->middleware('permission:items.crear');
+    Route::get('items/{item}', [ItemController::class, 'show'])->name('items.show')->middleware('permission:items.ver');
+    Route::get('items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit')->middleware('permission:items.editar');
+    Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update')->middleware('permission:items.editar');
+    Route::delete('items/{item}', [ItemController::class, 'destroy'])->name('items.destroy')->middleware('permission:items.eliminar');
 });
 
 require __DIR__ . '/auth.php';

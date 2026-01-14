@@ -28,7 +28,8 @@
                         </a>
                     @endcan
 
-                    @can('items.papelera')
+                    {{-- Papelera: debe coincidir con el permiso que protege la ruta (items.eliminar) --}}
+                    @can('items.eliminar')
                         <a href="{{ route('items.trash') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             <span class="inline-flex items-center gap-2">
@@ -147,7 +148,8 @@
                 </a>
             @endcan
 
-            @can('items.papelera')
+            {{-- Papelera móvil: debe coincidir con el permiso que protege la ruta (items.eliminar) --}}
+            @can('items.eliminar')
                 <a href="{{ route('items.trash') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Papelera @if(($itemsTrashCount ?? 0) > 0) ({{ $itemsTrashCount }}) @endif
