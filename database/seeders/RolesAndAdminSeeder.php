@@ -33,7 +33,7 @@ class RolesAndAdminSeeder extends Seeder
 
         foreach ($roles as $r) {
             Role::firstOrCreate([
-                'name'       => $r,
+                'name' => $r,
                 'guard_name' => $guard,
             ]);
         }
@@ -92,7 +92,7 @@ class RolesAndAdminSeeder extends Seeder
 
         foreach ($perms as $p) {
             Permission::firstOrCreate([
-                'name'       => $p,
+                'name' => $p,
                 'guard_name' => $guard,
             ]);
         }
@@ -100,9 +100,9 @@ class RolesAndAdminSeeder extends Seeder
         /**
          * Asignación de permisos por rol
          */
-        $adminRole   = Role::where('name', 'Admin')->where('guard_name', $guard)->firstOrFail();
+        $adminRole = Role::where('name', 'Admin')->where('guard_name', $guard)->firstOrFail();
         $almacenRole = Role::where('name', 'Almacen')->where('guard_name', $guard)->firstOrFail();
-        $ventasRole  = Role::where('name', 'Ventas')->where('guard_name', $guard)->firstOrFail();
+        $ventasRole = Role::where('name', 'Ventas')->where('guard_name', $guard)->firstOrFail();
         $auditorRole = Role::where('name', 'Auditor')->where('guard_name', $guard)->firstOrFail();
 
         // Admin = todo
@@ -111,9 +111,9 @@ class RolesAndAdminSeeder extends Seeder
         // Almacén
         $almacenRole->syncPermissions([
             'dashboard.ver',
-            'items.ver','items.crear','items.editar','items.eliminar',
-            'items.cambiar_estado','items.mover',
-            'items.papelera','items.restaurar',
+            'items.ver', 'items.crear', 'items.editar', 'items.eliminar',
+            'items.cambiar_estado', 'items.mover',
+            'items.papelera', 'items.restaurar',
             'movimientos.ver',
             'categorias.ver',
             'ubicaciones.ver',
@@ -126,7 +126,7 @@ class RolesAndAdminSeeder extends Seeder
             'items.ver',
             'items.cambiar_estado',
             'movimientos.ver',
-            'ventas.ver','ventas.crear','ventas.cerrar',
+            'ventas.ver', 'ventas.crear', 'ventas.cerrar',
             'categorias.ver',
             'ubicaciones.ver',
         ]);
@@ -144,20 +144,39 @@ class RolesAndAdminSeeder extends Seeder
         ]);
 
         /**
-         * Usuario Admin (elige UN correo y UNA contraseña)
+         * Usuario Admin inicial.
+         *
+         * Solo se crea cuando las credenciales se proporcionan explícitamente
+         * mediante variables de entorno. Nunca deben existir credenciales
+         * predeterminadas dentro del repositorio.
          */
-        $adminEmail = 'admin@desechos.test'; // o 'admin@gv.com.mx' si ya lo usas en prod/dev
-        $adminPass  = 'Admin123*';           // cámbiala luego en cuanto entres
+        $adminEmail = env('SEED_ADMIN_EMAIL');
+        $adminPass = env('SEED_ADMIN_PASSWORD');
+        $adminName = env('SEED_ADMIN_NAME', 'Admin');
 
-        $admin = User::firstOrCreate(
-            ['email' => $adminEmail],
-            [
-                'name'     => 'Admin',
-                'password' => Hash::make($adminPass),
-            ]
-        );
+        if (($adminEmail && ! $adminPass) || (! $adminEmail && $adminPass)) {
+            throw new \RuntimeException(
+                'SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD deben configurarse juntos.'
+            );
+        }
 
-        $admin->syncRoles(['Admin']);
+        if ($adminEmail && $adminPass) {
+            if (strlen($adminPass) < 12) {
+                throw new \RuntimeException(
+                    'SEED_ADMIN_PASSWORD debe tener al menos 12 caracteres.'
+                );
+            }
+
+            $admin = User::firstOrCreate(
+                ['email' => $adminEmail],
+                [
+                    'name' => $adminName,
+                    'password' => Hash::make($adminPass),
+                ]
+            );
+
+            $admin->syncRoles(['Admin']);
+        }
 
         // Limpia cache al final (útil en dev)
         app(PermissionRegistrar::class)->forgetCachedPermissions();
