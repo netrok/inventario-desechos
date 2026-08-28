@@ -8,14 +8,6 @@ use Illuminate\Validation\Rule;
 
 class CategoriaController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('permission:categorias.ver')->only(['index']);
-        $this->middleware('permission:categorias.crear')->only(['create', 'store']);
-        $this->middleware('permission:categorias.editar')->only(['edit', 'update']);
-        $this->middleware('permission:categorias.eliminar')->only(['destroy']);
-    }
-
     public function index(Request $request)
     {
         $q = trim((string) $request->get('q', ''));

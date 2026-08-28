@@ -28,8 +28,8 @@
                         </a>
                     @endcan
 
-                    {{-- Papelera: debe coincidir con el permiso que protege la ruta (items.eliminar) --}}
-                    @can('items.eliminar')
+                    {{-- Papelera: debe coincidir con el permiso que protege la ruta (items.papelera) --}}
+                    @can('items.papelera')
                         <a href="{{ route('items.trash') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             <span class="inline-flex items-center gap-2">
@@ -57,7 +57,7 @@
                         </a>
                     @endcan
 
-                    @can('usuarios.gestionar')
+                    @can('usuarios.ver')
                         <a href="{{ route('admin.users.index') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Admin / Usuarios
@@ -148,8 +148,8 @@
                 </a>
             @endcan
 
-            {{-- Papelera móvil: debe coincidir con el permiso que protege la ruta (items.eliminar) --}}
-            @can('items.eliminar')
+            {{-- Papelera móvil: debe coincidir con el permiso que protege la ruta (items.papelera) --}}
+            @can('items.papelera')
                 <a href="{{ route('items.trash') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Papelera @if(($itemsTrashCount ?? 0) > 0) ({{ $itemsTrashCount }}) @endif
@@ -170,7 +170,7 @@
                 </a>
             @endcan
 
-            @can('usuarios.gestionar')
+            @can('usuarios.ver')
                 <a href="{{ route('admin.users.index') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Admin / Usuarios

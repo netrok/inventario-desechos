@@ -20,21 +20,6 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ItemController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('permission:items.ver')->only(['index', 'show', 'exportXlsx', 'exportPdf']);
-        $this->middleware('permission:items.crear')->only(['create', 'store']);
-        $this->middleware('permission:items.editar')->only(['edit', 'update']);
-        $this->middleware('permission:items.eliminar')->only(['destroy']);
-
-        $this->middleware('permission:items.papelera')->only(['trash']);
-        $this->middleware('permission:items.restaurar')->only(['restore']);
-        $this->middleware('permission:items.borrar_definitivo')->only(['forceDelete']);
-
-        $this->middleware('permission:items.cambiar_estado')->only(['changeEstado']);
-        $this->middleware('permission:items.mover')->only(['moveUbicacion']);
-    }
-
     /**
      * Normaliza filtros desde request (index + export).
      */
@@ -112,7 +97,7 @@ class ItemController extends Controller
 
     private function deleteFotoIfExists(?string $fotoPath): void
     {
-        if (!Schema::hasColumn('items', 'foto_path')) {
+        if (! Schema::hasColumn('items', 'foto_path')) {
             return;
         }
 
@@ -123,11 +108,11 @@ class ItemController extends Controller
 
     private function storeFotoIfPresent(Request $request, ?string $oldPath = null): ?string
     {
-        if (!Schema::hasColumn('items', 'foto_path')) {
+        if (! Schema::hasColumn('items', 'foto_path')) {
             return $oldPath;
         }
 
-        if (!$request->hasFile('foto')) {
+        if (! $request->hasFile('foto')) {
             return $oldPath;
         }
 
@@ -234,7 +219,7 @@ class ItemController extends Controller
 
         // Validación transición estado
         $toEstado = $data['estado'] ?? $item->estado;
-        if ($beforeEstado !== $toEstado && !Item::canTransition($beforeEstado, $toEstado)) {
+        if ($beforeEstado !== $toEstado && ! Item::canTransition($beforeEstado, $toEstado)) {
             return back()->withErrors([
                 'estado' => "No se permite cambiar de {$beforeEstado} a {$toEstado}.",
             ])->withInput();
@@ -287,13 +272,13 @@ class ItemController extends Controller
         $data = $request->validate([
             'estado' => ['required', Rule::in(Item::ESTADOS)],
             'notas' => ['nullable', 'string', 'max:1000'],
-            'evidencia' => ['nullable', 'file', 'max:4096'],
+            'evidencia' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096'],
         ]);
 
         $from = $item->estado;
         $to = $data['estado'];
 
-        if ($from !== $to && !Item::canTransition($from, $to)) {
+        if ($from !== $to && ! Item::canTransition($from, $to)) {
             return back()->withErrors([
                 'estado' => "No se permite cambiar de {$from} a {$to}.",
             ])->withInput();
@@ -334,7 +319,7 @@ class ItemController extends Controller
         $data = $request->validate([
             'ubicacion_id' => ['nullable', 'exists:ubicaciones,id'],
             'notas' => ['nullable', 'string', 'max:1000'],
-            'evidencia' => ['nullable', 'file', 'max:4096'],
+            'evidencia' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096'],
         ]);
 
         $fromU = $item->ubicacion_id;
@@ -433,7 +418,7 @@ class ItemController extends Controller
         $filters = $this->filtersFromRequest($request);
 
         $query = $this->baseQuery($filters)->orderByDesc('id');
-        $filename = 'items_' . now()->format('Ymd_His') . '.xlsx';
+        $filename = 'items_'.now()->format('Ymd_His').'.xlsx';
 
         return Excel::download(new ItemsExport($query), $filename);
     }
@@ -447,10 +432,10 @@ class ItemController extends Controller
             ->get();
 
         $pdf = Pdf::loadView('items.pdf', [
-                'items' => $items,
-                'filters' => $filters,
-                'generatedAt' => now(),
-            ])
+            'items' => $items,
+            'filters' => $filters,
+            'generatedAt' => now(),
+        ])
             ->setPaper('a4', 'landscape')
             ->setOptions([
                 'isRemoteEnabled' => true,
@@ -459,6 +444,6 @@ class ItemController extends Controller
                 'defaultFont' => 'DejaVu Sans',
             ]);
 
-        return $pdf->download('items_' . now()->format('Ymd_His') . '.pdf');
+        return $pdf->download('items_'.now()->format('Ymd_His').'.pdf');
     }
 }

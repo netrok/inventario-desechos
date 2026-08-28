@@ -10,13 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-        // Opcional después:
-        // $this->middleware('permission:dashboard.ver')->only(['index']);
-    }
-
     public function index()
     {
         // KPIs
@@ -58,7 +51,7 @@ class DashboardController extends Controller
         // Movimientos últimos 7 días (groupBy + Postgres = sin order global)
         $movs7d = Movimiento::query()
             ->withoutGlobalScopes() // <- clave si Movimiento trae scope global con orderBy
-            ->selectRaw("date(fecha) as dia, count(*) as total")
+            ->selectRaw('date(fecha) as dia, count(*) as total')
             ->where('fecha', '>=', now()->subDays(6)->startOfDay())
             ->groupBy(DB::raw('date(fecha)'))
             ->reorder('dia', 'asc') // <- asegura que solo ordene por el alias

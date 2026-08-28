@@ -31,21 +31,25 @@
                         <td class="p-2">{{ $it->serie }}</td>
                         <td class="p-2">{{ $it->deleted_at }}</td>
                         <td class="p-2 text-right space-x-2">
-                            <form class="inline" method="POST" action="{{ route('items.restore', $it->id) }}">
-                                @csrf
-                                <button class="px-3 py-1 rounded bg-green-600 text-white"
-                                        onclick="return confirm('¿Restaurar este item?')">
-                                    Restaurar
-                                </button>
-                            </form>
+                            @can('items.restaurar')
+                                <form class="inline" method="POST" action="{{ route('items.restore', $it->id) }}">
+                                    @csrf
+                                    <button class="px-3 py-1 rounded bg-green-600 text-white"
+                                            onclick="return confirm('¿Restaurar este item?')">
+                                        Restaurar
+                                    </button>
+                                </form>
+                            @endcan
 
-                            <form class="inline" method="POST" action="{{ route('items.forceDelete', $it->id) }}">
-                                @csrf @method('DELETE')
-                                <button class="px-3 py-1 rounded bg-red-600 text-white"
-                                        onclick="return confirm('Esto lo borra para siempre. ¿Seguro?')">
-                                    Borrar definitivo
-                                </button>
-                            </form>
+                            @can('items.borrar_definitivo')
+                                <form class="inline" method="POST" action="{{ route('items.forceDelete', $it->id) }}">
+                                    @csrf @method('DELETE')
+                                    <button class="px-3 py-1 rounded bg-red-600 text-white"
+                                            onclick="return confirm('Esto lo borra para siempre. ¿Seguro?')">
+                                        Borrar definitivo
+                                    </button>
+                                </form>
+                            @endcan
                         </td>
                     </tr>
                 @empty

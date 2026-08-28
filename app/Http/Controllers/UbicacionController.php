@@ -11,14 +11,6 @@ use Illuminate\Support\Facades\Schema;
 
 class UbicacionController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('permission:ubicaciones.ver')->only(['index']);
-        $this->middleware('permission:ubicaciones.crear')->only(['create', 'store']);
-        $this->middleware('permission:ubicaciones.editar')->only(['edit', 'update']);
-        $this->middleware('permission:ubicaciones.eliminar')->only(['destroy']);
-    }
-
     public function index(Request $request)
     {
         $q = trim((string) $request->get('q', ''));

@@ -9,10 +9,12 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
-                <a href="{{ route('items.create') }}"
-                   class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
-                    <span class="text-base leading-none">＋</span> Nuevo
-                </a>
+                @can('items.crear')
+                    <a href="{{ route('items.create') }}"
+                       class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+                        <span class="text-base leading-none">＋</span> Nuevo
+                    </a>
+                @endcan
 
                 <a href="{{ route('items.export.xlsx', request()->query()) }}"
                    class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
@@ -234,10 +236,12 @@
                                                class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                                                 Ver
                                             </a>
-                                            <a href="{{ route('items.edit', $item) }}"
-                                               class="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black">
-                                                Editar
-                                            </a>
+                                            @can('items.editar')
+                                                <a href="{{ route('items.edit', $item) }}"
+                                                   class="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black">
+                                                    Editar
+                                                </a>
+                                            @endcan
                                         </div>
                                     </td>
                                 </tr>
