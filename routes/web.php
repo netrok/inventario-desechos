@@ -1,19 +1,20 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
-use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UbicacionController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('dashboard'));
 
 Route::middleware(['auth'])->group(function () {
 
     // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard')
+        ->middleware('permission:dashboard.ver');
 
     // Perfil
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -79,5 +80,5 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('items/{item}', [ItemController::class, 'destroy'])->name('items.destroy')->middleware('permission:items.eliminar');
 });
 
-require __DIR__ . '/auth.php';
-require __DIR__ . '/admin.php';
+require __DIR__.'/auth.php';
+require __DIR__.'/admin.php';
