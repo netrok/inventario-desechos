@@ -7,6 +7,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Movimiento extends Model
 {
+    public const TIPO_ALTA = 'ALTA';
+
+    public const TIPO_CAMBIO_ESTADO = 'CAMBIO_ESTADO';
+
+    public const TIPO_TRASLADO = 'TRASLADO';
+
+    public const TIPO_AJUSTE = 'AJUSTE';
+
+    public const TIPO_BAJA = 'BAJA';
+
+    public const TIPO_VENTA = 'VENTA';
+
+    public const TIPO_RESTAURAR = 'RESTAURAR';
+
     protected $fillable = [
         'item_id',
         'user_id',

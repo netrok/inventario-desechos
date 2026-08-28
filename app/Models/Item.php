@@ -37,7 +37,7 @@ class Item extends Model
     ];
 
     protected $casts = [
-        'codigo_seq'   => 'integer',
+        'codigo_seq' => 'integer',
         'categoria_id' => 'integer',
         'ubicacion_id' => 'integer',
     ];
@@ -45,17 +45,15 @@ class Item extends Model
     protected static function booted(): void
     {
         static::creating(function (Item $item) {
-            if (!empty($item->codigo) && !empty($item->codigo_seq)) {
+            if (! empty($item->codigo) && ! empty($item->codigo_seq)) {
                 return;
             }
 
-            $next = DB::transaction(function () {
-                DB::statement('LOCK TABLE items IN EXCLUSIVE MODE');
-                return (int) (DB::table('items')->max('codigo_seq') ?? 0) + 1;
-            });
+            $seq = DB::selectOne('SELECT nextval(\'items_codigo_seq_generator\') AS seq');
+            $next = (int) $seq->seq;
 
             $item->codigo_seq = $item->codigo_seq ?: $next;
-            $item->codigo = $item->codigo ?: ('ITM-' . str_pad((string) $item->codigo_seq, 6, '0', STR_PAD_LEFT));
+            $item->codigo = $item->codigo ?: ('ITM-'.str_pad((string) $item->codigo_seq, 6, '0', STR_PAD_LEFT));
         });
     }
 
@@ -63,10 +61,10 @@ class Item extends Model
     {
         $map = [
             'DISPONIBLE' => ['RESERVADO', 'REPARACION', 'BAJA', 'VENDIDO'],
-            'RESERVADO'  => ['DISPONIBLE', 'VENDIDO', 'BAJA'],
+            'RESERVADO' => ['DISPONIBLE', 'VENDIDO', 'BAJA'],
             'REPARACION' => ['DISPONIBLE', 'BAJA'],
-            'VENDIDO'    => [],
-            'BAJA'       => [],
+            'VENDIDO' => [],
+            'BAJA' => [],
         ];
 
         return in_array($to, $map[$from] ?? [], true);

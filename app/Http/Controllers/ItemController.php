@@ -13,9 +13,11 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ItemController extends Controller
@@ -106,20 +108,24 @@ class ItemController extends Controller
         }
     }
 
-    private function storeFotoIfPresent(Request $request, ?string $oldPath = null): ?string
+    private function storeNewFotoIfPresent(Request $request): ?string
     {
         if (! Schema::hasColumn('items', 'foto_path')) {
-            return $oldPath;
+            return null;
         }
 
         if (! $request->hasFile('foto')) {
-            return $oldPath;
+            return null;
         }
 
-        // Reemplazo: borra anterior
-        $this->deleteFotoIfExists($oldPath);
-
         return $request->file('foto')->store('items', 'public');
+    }
+
+    private function deleteEvidenciaIfExists(?string $evidenciaPath): void
+    {
+        if ($evidenciaPath && Storage::disk('public')->exists($evidenciaPath)) {
+            Storage::disk('public')->delete($evidenciaPath);
+        }
     }
 
     public function index(Request $request)
@@ -162,23 +168,29 @@ class ItemController extends Controller
         unset($data['codigo'], $data['codigo_seq']); // lo genera el modelo
         unset($data['categoria']); // legacy eliminado
 
-        $data['foto_path'] = $this->storeFotoIfPresent($request, null);
+        $fotoPath = $this->storeNewFotoIfPresent($request);
         unset($data['foto']);
 
-        $item = Item::create($data);
+        try {
+            DB::transaction(function () use ($data, $fotoPath): void {
+                $item = Item::create($data + ['foto_path' => $fotoPath]);
 
-        Movimiento::create([
-            'item_id' => $item->id,
-            'user_id' => Auth::id(),
-            'tipo' => 'ALTA',
-            'de_estado' => null,
-            'a_estado' => $item->estado,
-            'de_ubicacion_id' => null,
-            'a_ubicacion_id' => $item->ubicacion_id,
-            'notas' => 'Alta de item',
-            'evidencia_path' => null,
-            'fecha' => now(),
-        ]);
+                Movimiento::create([
+                    'item_id' => $item->id,
+                    'user_id' => Auth::id(),
+                    'tipo' => Movimiento::TIPO_ALTA,
+                    'de_estado' => null,
+                    'a_estado' => $item->estado,
+                    'de_ubicacion_id' => null,
+                    'a_ubicacion_id' => $item->ubicacion_id,
+                    'notas' => 'Alta de item',
+                    'evidencia_path' => null,
+                ]);
+            });
+        } catch (\Throwable $e) {
+            $this->deleteFotoIfExists($fotoPath);
+            throw $e;
+        }
 
         return redirect()->route('items.index')->with('success', 'Item creado.');
     }
@@ -214,52 +226,75 @@ class ItemController extends Controller
         $data = $request->validated();
         $deleteFoto = $request->boolean('delete_foto');
 
-        $beforeEstado = $item->estado;
-        $beforeUbicacion = $item->ubicacion_id;
-
-        // Validación transición estado
         $toEstado = $data['estado'] ?? $item->estado;
-        if ($beforeEstado !== $toEstado && ! Item::canTransition($beforeEstado, $toEstado)) {
+        if ($item->estado !== $toEstado && ! Item::canTransition($item->estado, $toEstado)) {
             return back()->withErrors([
-                'estado' => "No se permite cambiar de {$beforeEstado} a {$toEstado}.",
+                'estado' => "No se permite cambiar de {$item->estado} a {$toEstado}.",
             ])->withInput();
         }
 
         unset($data['codigo'], $data['codigo_seq']); // no override
         unset($data['categoria']); // legacy eliminado
-
-        // Foto: borrar
-        if ($deleteFoto) {
-            $this->deleteFotoIfExists($item->foto_path);
-            $data['foto_path'] = null;
-        }
-
-        // Foto: nueva (reemplaza). Si no hay foto nueva, conserva lo actual / lo que quede.
-        $currentPath = array_key_exists('foto_path', $data) ? $data['foto_path'] : $item->foto_path;
-        $data['foto_path'] = $this->storeFotoIfPresent($request, $currentPath);
-
         unset($data['foto'], $data['delete_foto']);
 
-        $item->update($data);
+        $newFotoPath = $this->storeNewFotoIfPresent($request);
 
-        $changedEstado = $beforeEstado !== $item->estado;
-        $changedUbicacion = (string) $beforeUbicacion !== (string) $item->ubicacion_id;
+        $replacedFotoPath = null;
 
-        if ($changedEstado || $changedUbicacion) {
-            Movimiento::create([
-                'item_id' => $item->id,
-                'user_id' => Auth::id(),
-                'tipo' => $changedEstado && $changedUbicacion
-                    ? 'AJUSTE'
-                    : ($changedEstado ? 'CAMBIO_ESTADO' : 'TRASLADO'),
-                'de_estado' => $beforeEstado,
-                'a_estado' => $item->estado,
-                'de_ubicacion_id' => $beforeUbicacion,
-                'a_ubicacion_id' => $item->ubicacion_id,
-                'notas' => 'Actualización de item',
-                'evidencia_path' => null,
-                'fecha' => now(),
-            ]);
+        try {
+            DB::transaction(function () use ($item, $data, $deleteFoto, $newFotoPath, &$replacedFotoPath): void {
+                $locked = Item::query()->lockForUpdate()->findOrFail($item->getKey());
+
+                $beforeEstado = $locked->estado;
+                $beforeUbicacion = $locked->ubicacion_id;
+                $beforeFotoPath = $locked->foto_path;
+
+                $toEstadoLocked = $data['estado'] ?? $beforeEstado;
+                if ($beforeEstado !== $toEstadoLocked && ! Item::canTransition($beforeEstado, $toEstadoLocked)) {
+                    throw ValidationException::withMessages([
+                        'estado' => "No se permite cambiar de {$beforeEstado} a {$toEstadoLocked}.",
+                    ]);
+                }
+
+                $payload = $data;
+                $payload['foto_path'] = $newFotoPath !== null
+                    ? $newFotoPath
+                    : ($deleteFoto ? null : $beforeFotoPath);
+
+                $locked->update($payload);
+
+                $changedEstado = $beforeEstado !== $locked->estado;
+                $changedUbicacion = (string) $beforeUbicacion !== (string) $locked->ubicacion_id;
+
+                if ($changedEstado || $changedUbicacion) {
+                    Movimiento::create([
+                        'item_id' => $locked->id,
+                        'user_id' => Auth::id(),
+                        'tipo' => $changedEstado && $changedUbicacion
+                            ? Movimiento::TIPO_AJUSTE
+                            : ($changedEstado ? Movimiento::TIPO_CAMBIO_ESTADO : Movimiento::TIPO_TRASLADO),
+                        'de_estado' => $beforeEstado,
+                        'a_estado' => $locked->estado,
+                        'de_ubicacion_id' => $beforeUbicacion,
+                        'a_ubicacion_id' => $locked->ubicacion_id,
+                        'notas' => 'Actualización de item',
+                        'evidencia_path' => null,
+                    ]);
+                }
+
+                if ($deleteFoto || $newFotoPath !== null) {
+                    $replacedFotoPath = $beforeFotoPath;
+                }
+            });
+        } catch (\Throwable $e) {
+            $this->deleteFotoIfExists($newFotoPath);
+            throw $e;
+        }
+
+        // La transacción se confirmó: recién aquí se elimina la foto anterior realmente reemplazada
+        // (leída bajo lock como fuente de verdad, no la instancia route-model previa).
+        if ($replacedFotoPath !== null) {
+            $this->deleteFotoIfExists($replacedFotoPath);
         }
 
         return redirect()->route('items.show', $item)->with('success', 'Item actualizado.');
@@ -267,88 +302,128 @@ class ItemController extends Controller
 
     public function changeEstado(Request $request, $id)
     {
-        $item = Item::findOrFail($id);
-
         $data = $request->validate([
             'estado' => ['required', Rule::in(Item::ESTADOS)],
             'notas' => ['nullable', 'string', 'max:1000'],
             'evidencia' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096'],
         ]);
 
-        $from = $item->estado;
-        $to = $data['estado'];
+        $item = Item::findOrFail($id);
 
-        if ($from !== $to && ! Item::canTransition($from, $to)) {
-            return back()->withErrors([
-                'estado' => "No se permite cambiar de {$from} a {$to}.",
-            ])->withInput();
+        if ($item->estado === $data['estado']) {
+            return back()->with('success', "Estado sin cambios ({$data['estado']}).");
         }
 
-        if ($from === $to) {
-            return back()->with('success', "Estado sin cambios ({$to}).");
+        $evidenciaPath = null;
+
+        try {
+            $changed = DB::transaction(function () use ($request, $id, $data, &$evidenciaPath): bool {
+                $locked = Item::query()->lockForUpdate()->findOrFail($id);
+
+                $from = $locked->estado;
+                $to = $data['estado'];
+
+                if ($from === $to) {
+                    return false;
+                }
+
+                if (! Item::canTransition($from, $to)) {
+                    throw ValidationException::withMessages([
+                        'estado' => "No se permite cambiar de {$from} a {$to}.",
+                    ]);
+                }
+
+                $evidenciaPath = $request->hasFile('evidencia')
+                    ? $request->file('evidencia')->store('movimientos', 'public')
+                    : null;
+
+                $ubicacionActual = $locked->ubicacion_id;
+
+                $locked->update(['estado' => $to]);
+
+                Movimiento::create([
+                    'item_id' => $locked->id,
+                    'user_id' => Auth::id(),
+                    'tipo' => $to === 'BAJA' ? Movimiento::TIPO_BAJA : ($to === 'VENDIDO' ? Movimiento::TIPO_VENTA : Movimiento::TIPO_CAMBIO_ESTADO),
+                    'de_estado' => $from,
+                    'a_estado' => $to,
+                    'de_ubicacion_id' => $ubicacionActual,
+                    'a_ubicacion_id' => $ubicacionActual,
+                    'notas' => $data['notas'] ?? 'Cambio de estado',
+                    'evidencia_path' => $evidenciaPath,
+                ]);
+
+                return true;
+            });
+        } catch (\Throwable $e) {
+            $this->deleteEvidenciaIfExists($evidenciaPath);
+            throw $e;
         }
 
-        $evidenciaPath = $request->hasFile('evidencia')
-            ? $request->file('evidencia')->store('movimientos', 'public')
-            : null;
+        if (! $changed) {
+            return back()->with('success', "Estado sin cambios ({$data['estado']}).");
+        }
 
-        $ubicacionActual = $item->ubicacion_id;
-
-        $item->update(['estado' => $to]);
-
-        Movimiento::create([
-            'item_id' => $item->id,
-            'user_id' => Auth::id(),
-            'tipo' => $to === 'BAJA' ? 'BAJA' : ($to === 'VENDIDO' ? 'VENTA' : 'CAMBIO_ESTADO'),
-            'de_estado' => $from,
-            'a_estado' => $to,
-            'de_ubicacion_id' => $ubicacionActual,
-            'a_ubicacion_id' => $ubicacionActual,
-            'notas' => $data['notas'] ?? 'Cambio de estado',
-            'evidencia_path' => $evidenciaPath,
-            'fecha' => now(),
-        ]);
-
-        return back()->with('success', "Estado actualizado a {$to}.");
+        return back()->with('success', "Estado actualizado a {$data['estado']}.");
     }
 
     public function moveUbicacion(Request $request, $id)
     {
-        $item = Item::findOrFail($id);
-
         $data = $request->validate([
             'ubicacion_id' => ['nullable', 'exists:ubicaciones,id'],
             'notas' => ['nullable', 'string', 'max:1000'],
             'evidencia' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096'],
         ]);
 
-        $fromU = $item->ubicacion_id;
+        $item = Item::findOrFail($id);
         $toU = $data['ubicacion_id'] ?? null;
 
-        if ((string) $fromU === (string) $toU) {
+        if ((string) $item->ubicacion_id === (string) $toU) {
             return back()->with('success', 'Ubicación sin cambios.');
         }
 
-        $evidenciaPath = $request->hasFile('evidencia')
-            ? $request->file('evidencia')->store('movimientos', 'public')
-            : null;
+        $evidenciaPath = null;
 
-        $estadoActual = $item->estado;
+        try {
+            $moved = DB::transaction(function () use ($request, $id, $toU, $data, &$evidenciaPath): bool {
+                $locked = Item::query()->lockForUpdate()->findOrFail($id);
 
-        $item->update(['ubicacion_id' => $toU]);
+                $fromU = $locked->ubicacion_id;
 
-        Movimiento::create([
-            'item_id' => $item->id,
-            'user_id' => Auth::id(),
-            'tipo' => 'TRASLADO',
-            'de_estado' => $estadoActual,
-            'a_estado' => $estadoActual,
-            'de_ubicacion_id' => $fromU,
-            'a_ubicacion_id' => $toU,
-            'notas' => $data['notas'] ?? 'Movimiento de ubicación',
-            'evidencia_path' => $evidenciaPath,
-            'fecha' => now(),
-        ]);
+                if ((string) $fromU === (string) $toU) {
+                    return false;
+                }
+
+                $evidenciaPath = $request->hasFile('evidencia')
+                    ? $request->file('evidencia')->store('movimientos', 'public')
+                    : null;
+
+                $estadoActual = $locked->estado;
+
+                $locked->update(['ubicacion_id' => $toU]);
+
+                Movimiento::create([
+                    'item_id' => $locked->id,
+                    'user_id' => Auth::id(),
+                    'tipo' => Movimiento::TIPO_TRASLADO,
+                    'de_estado' => $estadoActual,
+                    'a_estado' => $estadoActual,
+                    'de_ubicacion_id' => $fromU,
+                    'a_ubicacion_id' => $toU,
+                    'notas' => $data['notas'] ?? 'Movimiento de ubicación',
+                    'evidencia_path' => $evidenciaPath,
+                ]);
+
+                return true;
+            });
+        } catch (\Throwable $e) {
+            $this->deleteEvidenciaIfExists($evidenciaPath);
+            throw $e;
+        }
+
+        if (! $moved) {
+            return back()->with('success', 'Ubicación sin cambios.');
+        }
 
         return back()->with('success', 'Ubicación actualizada.');
     }
@@ -376,21 +451,22 @@ class ItemController extends Controller
 
     public function restore($id)
     {
-        $item = Item::onlyTrashed()->findOrFail($id);
-        $item->restore();
+        DB::transaction(function () use ($id): void {
+            $item = Item::onlyTrashed()->lockForUpdate()->findOrFail($id);
+            $item->restore();
 
-        Movimiento::create([
-            'item_id' => $item->id,
-            'user_id' => Auth::id(),
-            'tipo' => 'RESTAURAR',
-            'de_estado' => null,
-            'a_estado' => $item->estado,
-            'de_ubicacion_id' => null,
-            'a_ubicacion_id' => $item->ubicacion_id,
-            'notas' => 'Item restaurado desde papelera',
-            'evidencia_path' => null,
-            'fecha' => now(),
-        ]);
+            Movimiento::create([
+                'item_id' => $item->id,
+                'user_id' => Auth::id(),
+                'tipo' => Movimiento::TIPO_RESTAURAR,
+                'de_estado' => null,
+                'a_estado' => $item->estado,
+                'de_ubicacion_id' => null,
+                'a_ubicacion_id' => $item->ubicacion_id,
+                'notas' => 'Item restaurado desde papelera',
+                'evidencia_path' => null,
+            ]);
+        });
 
         return redirect()->route('items.trash')->with('success', 'Item restaurado.');
     }
