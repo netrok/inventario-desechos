@@ -8,10 +8,22 @@
                 </p>
             </div>
 
-            <a href="{{ route('ventas.index') }}"
-               class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
-                ← Volver a ventas
-            </a>
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="{{ route('ventas.ticket', ['venta' => $venta, 'width' => 80]) }}"
+                   target="_blank"
+                   class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
+                    Imprimir ticket 80 mm
+                </a>
+                <a href="{{ route('ventas.ticket', ['venta' => $venta, 'width' => 58]) }}"
+                   target="_blank"
+                   class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
+                    Ticket 58 mm
+                </a>
+                <a href="{{ route('ventas.index') }}"
+                   class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
+                    ← Volver a ventas
+                </a>
+            </div>
         </div>
     </x-slot>
 

@@ -26,6 +26,8 @@ class VentaDetalle extends Model
 
     public function item(): BelongsTo
     {
-        return $this->belongsTo(Item::class, 'item_id');
+        // Una Venta histórica sigue siendo consultable aunque el Item quede
+        // soft-deleted por un mecanismo técnico/legacy. Sin restaurar ni mutar.
+        return $this->belongsTo(Item::class, 'item_id')->withTrashed();
     }
 }

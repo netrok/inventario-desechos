@@ -147,6 +147,11 @@ Route::middleware(['auth'])->group(function () {
         ->name('ventas.show')
         ->middleware('permission:ventas.ver');
 
+    // Ticket imprimible (consultas: imprimir/reimprimir es lectura).
+    Route::get('ventas/{venta}/ticket', [VentaController::class, 'ticket'])
+        ->name('ventas.ticket')
+        ->middleware('permission:ventas.ver');
+
     /**
      * =========================
      * Reportes operativos
