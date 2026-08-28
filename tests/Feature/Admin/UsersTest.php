@@ -18,11 +18,20 @@ beforeEach(function () {
     Role::findOrCreate('Admin', $guard);
     Role::findOrCreate('Operador', $guard);
 
-    // Permiso que protege /admin/users (según tu nav y módulo)
-    Permission::findOrCreate('usuarios.gestionar', $guard);
+    // Permisos reales definidos para el módulo de usuarios
+    $userPermissions = [
+        'usuarios.ver',
+        'usuarios.crear',
+        'usuarios.editar',
+        'usuarios.eliminar',
+        'usuarios.roles',
+    ];
 
-    // Admin debe tener ese permiso
-    Role::findByName('Admin', $guard)->givePermissionTo('usuarios.gestionar');
+    foreach ($userPermissions as $permission) {
+        Permission::findOrCreate($permission, $guard);
+    }
+
+    Role::findByName('Admin', $guard)->syncPermissions($userPermissions);
 
     app(PermissionRegistrar::class)->forgetCachedPermissions();
 });

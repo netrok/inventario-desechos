@@ -12,13 +12,6 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function __construct()
-    {
-        // Si tu ruta ya está protegida con role:Admin en routes/admin.php, esto es extra-seguro.
-        // Recomendado: permiso específico para gestionar usuarios.
-        $this->middleware('permission:usuarios.gestionar');
-    }
-
     public function index(Request $request)
     {
         $q = trim((string) $request->query('q', ''));
@@ -27,7 +20,7 @@ class UserController extends Controller
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($qq) use ($q) {
                     $qq->where('name', 'ilike', "%{$q}%")
-                       ->orWhere('email', 'ilike', "%{$q}%");
+                        ->orWhere('email', 'ilike', "%{$q}%");
                 });
             })
             ->with('roles')
@@ -82,7 +75,7 @@ class UserController extends Controller
             'email' => $data['email'],
         ]);
 
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $user->password = Hash::make($data['password']);
         }
 
