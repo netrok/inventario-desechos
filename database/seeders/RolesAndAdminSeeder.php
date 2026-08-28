@@ -57,6 +57,9 @@ class RolesAndAdminSeeder extends Seeder
             // Movimientos
             'movimientos.ver',
 
+            // Reportes
+            'reportes.ver',
+
             // Categorías
             'categorias.ver',
             'categorias.crear',
@@ -110,6 +113,7 @@ class RolesAndAdminSeeder extends Seeder
             'items.ver', 'items.crear', 'items.editar',
             'items.cambiar_estado', 'items.mover',
             'movimientos.ver',
+            'reportes.ver',
             'categorias.ver',
             'ubicaciones.ver',
             'catalogos.ver',
@@ -131,6 +135,7 @@ class RolesAndAdminSeeder extends Seeder
             'dashboard.ver',
             'items.ver',
             'movimientos.ver',
+            'reportes.ver',
             'categorias.ver',
             'ubicaciones.ver',
             'catalogos.ver',

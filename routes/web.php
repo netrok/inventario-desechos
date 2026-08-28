@@ -4,6 +4,7 @@ use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UbicacionController;
 use Illuminate\Support\Facades\Route;
 
@@ -106,6 +107,39 @@ Route::middleware(['auth'])->group(function () {
     Route::get('items/{item}/label', [ItemController::class, 'label'])->name('items.label')->middleware('permission:items.ver');
     Route::get('items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit')->middleware('permission:items.editar');
     Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update')->middleware('permission:items.editar');
+
+    /**
+     * =========================
+     * Reportes operativos
+     * =========================
+     */
+    Route::get('reports', [ReportController::class, 'index'])
+        ->name('reports.index')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory', [ReportController::class, 'inventory'])
+        ->name('reports.inventory')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory.xlsx', [ReportController::class, 'inventoryXlsx'])
+        ->name('reports.inventory.xlsx')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory.pdf', [ReportController::class, 'inventoryPdf'])
+        ->name('reports.inventory.pdf')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/movimientos', [ReportController::class, 'movimientos'])
+        ->name('reports.movimientos')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/movimientos.xlsx', [ReportController::class, 'movimientosXlsx'])
+        ->name('reports.movimientos.xlsx')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/movimientos.pdf', [ReportController::class, 'movimientosPdf'])
+        ->name('reports.movimientos.pdf')
+        ->middleware('permission:reportes.ver');
 });
 
 require __DIR__.'/auth.php';
