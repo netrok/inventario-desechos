@@ -99,9 +99,11 @@ Route::middleware(['auth'])->group(function () {
 
     // CRUD principal
     Route::get('items', [ItemController::class, 'index'])->name('items.index')->middleware('permission:items.ver');
+    Route::get('items/scan', [ItemController::class, 'scan'])->name('items.scan')->middleware('permission:items.ver');
     Route::get('items/create', [ItemController::class, 'create'])->name('items.create')->middleware('permission:items.crear');
     Route::post('items', [ItemController::class, 'store'])->name('items.store')->middleware('permission:items.crear');
     Route::get('items/{item}', [ItemController::class, 'show'])->name('items.show')->middleware('permission:items.ver');
+    Route::get('items/{item}/label', [ItemController::class, 'label'])->name('items.label')->middleware('permission:items.ver');
     Route::get('items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit')->middleware('permission:items.editar');
     Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update')->middleware('permission:items.editar');
 });

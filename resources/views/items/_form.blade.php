@@ -1,5 +1,7 @@
 @php
     $isEdit = isset($item) && $item?->exists;
+    $hasQuickValues = ! $isEdit && old('categoria_id') !== null && old('categoria_id') !== '';
+    $autoFocus = $isEdit ? null : ($hasQuickValues ? 'marca' : 'categoria_id');
 @endphp
 
 <div class="space-y-6">
@@ -50,6 +52,7 @@
                     name="marca"
                     value="{{ old('marca', $item->marca ?? '') }}"
                     placeholder="Ej. Dell, HP, Lenovo"
+                    @if(($autoFocus ?? null) === 'marca') autofocus @endif
                     class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('marca') border-rose-300 ring-rose-200 @enderror"
                 >
                 @error('marca') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
@@ -74,6 +77,7 @@
                 @if(isset($categorias) && $categorias?->count())
                     <select
                         name="categoria_id"
+                        @if(($autoFocus ?? null) === 'categoria_id') autofocus @endif
                         class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('categoria_id') border-rose-300 ring-rose-200 @enderror"
                     >
                         <option value="">— Selecciona —</option>

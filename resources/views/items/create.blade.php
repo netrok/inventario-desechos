@@ -14,6 +14,22 @@
                 </a>
             </div>
 
+            @if(session('success'))
+                <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            @if ($errors->any())
+                <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                    <ul class="list-disc ps-5 space-y-1">
+                        @foreach($errors->all() as $e)
+                            <li>{{ $e }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
                 <form method="POST"
                       action="{{ route('items.store') }}"
@@ -34,6 +50,13 @@
                            class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50">
                             Cancelar
                         </a>
+
+                        <button type="submit"
+                                name="save_and_new"
+                                value="1"
+                                class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50">
+                            Guardar y capturar otro
+                        </button>
 
                         <button type="submit"
                                 class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black">

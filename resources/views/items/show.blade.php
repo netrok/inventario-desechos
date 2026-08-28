@@ -55,6 +55,14 @@
                         ← Volver
                     </a>
 
+                    @can('items.ver')
+                        <a href="{{ route('items.label', $item) }}"
+                           target="_blank"
+                           class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50">
+                            Imprimir etiqueta
+                        </a>
+                    @endcan
+
                     @can('items.editar')
                         <a href="{{ route('items.edit', $item) }}"
                            class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">

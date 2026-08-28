@@ -171,7 +171,7 @@ class ItemController extends Controller
         unset($data['foto']);
 
         try {
-            DB::transaction(function () use ($data, $fotoPath): void {
+            $item = DB::transaction(function () use ($data, $fotoPath) {
                 $item = Item::create($data + ['foto_path' => $fotoPath]);
 
                 Movimiento::create([
@@ -185,13 +185,25 @@ class ItemController extends Controller
                     'notas' => 'Alta de item',
                     'evidencia_path' => null,
                 ]);
+
+                return $item;
             });
         } catch (\Throwable $e) {
             $this->deleteFotoIfExists($fotoPath);
             throw $e;
         }
 
-        return redirect()->route('items.index')->with('success', 'Item creado.');
+        if ($request->boolean('save_and_new')) {
+            return redirect()->route('items.create')
+                ->withInput([
+                    'categoria_id' => $data['categoria_id'] ?? '',
+                    'ubicacion_id' => $data['ubicacion_id'] ?? '',
+                    'estado' => $data['estado'] ?? Item::ESTADOS[0],
+                ])
+                ->with('success', "Item {$item->codigo} creado correctamente.");
+        }
+
+        return redirect()->route('items.index')->with('success', "Item {$item->codigo} creado.");
     }
 
     public function show(Item $item)
@@ -208,6 +220,47 @@ class ItemController extends Controller
             'item' => $item,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
         ]);
+    }
+
+    /**
+     * Pantalla de escaneo/búsqueda por código (scanner USB tipo teclado).
+     * El código normalizado (trim + uppercase) resuelve de forma determinista.
+     */
+    public function scan(Request $request)
+    {
+        $codigo = trim((string) $request->query('codigo', ''));
+        $error = null;
+
+        if ($codigo !== '') {
+            $normalized = strtoupper($codigo);
+
+            if (mb_strlen($normalized) > 40) {
+                $error = 'El código es demasiado largo.';
+            } else {
+                $item = Item::query()->where('codigo', $normalized)->first();
+
+                if ($item instanceof Item) {
+                    return redirect()->route('items.show', $item);
+                }
+
+                $error = "No existe un equipo con el código {$normalized}.";
+            }
+        }
+
+        return view('items.scan', [
+            'error' => $error,
+            'last_codigo' => $codigo,
+        ]);
+    }
+
+    /**
+     * Etiqueta imprimible de un Item (identificación/consulta).
+     */
+    public function label(Item $item)
+    {
+        $item->loadMissing('categoria');
+
+        return view('items.label', ['item' => $item]);
     }
 
     public function edit(Item $item)

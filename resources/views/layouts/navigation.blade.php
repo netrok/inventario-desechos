@@ -23,8 +23,15 @@
 
                     @can('items.ver')
                         <a href="{{ route('items.index') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.index', 'items.show', 'items.create', 'items.edit') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Items
+                        </a>
+                    @endcan
+
+                    @can('items.ver')
+                        <a href="{{ route('items.scan') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.scan') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Escanear
                         </a>
                     @endcan
 
@@ -128,8 +135,15 @@
 
             @can('items.ver')
                 <a href="{{ route('items.index') }}"
-                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.index', 'items.show', 'items.create', 'items.edit') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Items
+                </a>
+            @endcan
+
+            @can('items.ver')
+                <a href="{{ route('items.scan') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.scan') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Escanear
                 </a>
             @endcan
 
