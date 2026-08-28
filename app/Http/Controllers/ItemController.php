@@ -147,7 +147,6 @@ class ItemController extends Controller
             'estados' => Item::ESTADOS,
             'filters' => $filters,
             'stats' => $stats,
-            'trashCount' => Item::onlyTrashed()->count(),
         ]);
     }
 
@@ -426,67 +425,6 @@ class ItemController extends Controller
         }
 
         return back()->with('success', 'Ubicación actualizada.');
-    }
-
-    public function trash(Request $request)
-    {
-        $q = trim((string) $request->get('q', ''));
-
-        $items = Item::onlyTrashed()
-            ->when($q !== '', function (Builder $qq) use ($q) {
-                $qq->where(function (Builder $w) use ($q) {
-                    $w->where('codigo', 'ilike', "%{$q}%")
-                        ->orWhere('serie', 'ilike', "%{$q}%");
-                });
-            })
-            ->orderByDesc('deleted_at')
-            ->paginate(15)
-            ->withQueryString();
-
-        return view('items.trash', [
-            'items' => $items,
-            'q' => $q,
-        ]);
-    }
-
-    public function restore($id)
-    {
-        DB::transaction(function () use ($id): void {
-            $item = Item::onlyTrashed()->lockForUpdate()->findOrFail($id);
-            $item->restore();
-
-            Movimiento::create([
-                'item_id' => $item->id,
-                'user_id' => Auth::id(),
-                'tipo' => Movimiento::TIPO_RESTAURAR,
-                'de_estado' => null,
-                'a_estado' => $item->estado,
-                'de_ubicacion_id' => null,
-                'a_ubicacion_id' => $item->ubicacion_id,
-                'notas' => 'Item restaurado desde papelera',
-                'evidencia_path' => null,
-            ]);
-        });
-
-        return redirect()->route('items.trash')->with('success', 'Item restaurado.');
-    }
-
-    public function forceDelete($id)
-    {
-        $item = Item::onlyTrashed()->findOrFail($id);
-
-        $this->deleteFotoIfExists($item->foto_path);
-
-        $item->forceDelete();
-
-        return redirect()->route('items.trash')->with('success', 'Item eliminado permanentemente.');
-    }
-
-    public function destroy(Item $item)
-    {
-        $item->delete();
-
-        return redirect()->route('items.index')->with('success', 'Item enviado a papelera.');
     }
 
     public function exportXlsx(Request $request)

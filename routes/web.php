@@ -88,19 +88,6 @@ Route::middleware(['auth'])->group(function () {
         ->name('items.export.pdf')
         ->middleware('permission:items.ver');
 
-    // Papelera
-    Route::get('items-trash', [ItemController::class, 'trash'])
-        ->name('items.trash')
-        ->middleware('permission:items.papelera');
-
-    Route::post('items/{id}/restore', [ItemController::class, 'restore'])
-        ->name('items.restore')
-        ->middleware('permission:items.restaurar');
-
-    Route::delete('items/{id}/force', [ItemController::class, 'forceDelete'])
-        ->name('items.forceDelete')
-        ->middleware('permission:items.borrar_definitivo');
-
     // Acciones rápidas (editar)
     Route::post('items/{id}/estado', [ItemController::class, 'changeEstado'])
         ->name('items.changeEstado')
@@ -117,7 +104,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('items/{item}', [ItemController::class, 'show'])->name('items.show')->middleware('permission:items.ver');
     Route::get('items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit')->middleware('permission:items.editar');
     Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update')->middleware('permission:items.editar');
-    Route::delete('items/{item}', [ItemController::class, 'destroy'])->name('items.destroy')->middleware('permission:items.eliminar');
 });
 
 require __DIR__.'/auth.php';

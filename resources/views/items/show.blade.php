@@ -61,17 +61,6 @@
                             Editar
                         </a>
                     @endcan
-
-                    @can('items.eliminar')
-                        <form method="POST" action="{{ route('items.destroy', $item) }}"
-                              onsubmit="return confirm('¿Enviar este item a la papelera?');">
-                            @csrf
-                            @method('DELETE')
-                            <button class="inline-flex items-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100">
-                                Eliminar
-                            </button>
-                        </form>
-                    @endcan
                 </div>
             </div>
 
@@ -279,6 +268,9 @@
                                             <option value="{{ $e }}" @selected($item->estado === $e)>{{ $e }}</option>
                                         @endforeach
                                     </select>
+                                    <p class="text-xs text-gray-500">
+                                        BAJA retira el equipo de operación; el registro se conserva para trazabilidad.
+                                    </p>
 
                                     <input name="notas" placeholder="Notas (opcional)"
                                            class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
@@ -324,19 +316,6 @@
                                 </form>
                             @endcan
                         </div>
-                    </div>
-
-                    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
-                        <div class="px-6 py-4 border-b border-gray-100">
-                            <h2 class="text-sm font-semibold text-gray-900">Atajo</h2>
-                        </div>
-                        @can('items.papelera')
-                            <div class="p-6">
-                                <a href="{{ route('items.trash') }}" class="text-sm text-gray-700 hover:text-gray-900 underline">
-                                    Ver papelera
-                                </a>
-                            </div>
-                        @endcan
                     </div>
 
                 </div>

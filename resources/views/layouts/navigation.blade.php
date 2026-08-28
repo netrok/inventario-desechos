@@ -23,23 +23,8 @@
 
                     @can('items.ver')
                         <a href="{{ route('items.index') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.*') && !request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Items
-                        </a>
-                    @endcan
-
-                    {{-- Papelera: debe coincidir con el permiso que protege la ruta (items.papelera) --}}
-                    @can('items.papelera')
-                        <a href="{{ route('items.trash') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                            <span class="inline-flex items-center gap-2">
-                                Papelera
-                                @if(($itemsTrashCount ?? 0) > 0)
-                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-semibold rounded-full border bg-rose-100 text-rose-700 border-rose-200">
-                                        {{ $itemsTrashCount }}
-                                    </span>
-                                @endif
-                            </span>
                         </a>
                     @endcan
 
@@ -99,7 +84,7 @@
                     $newUrl = null;
                     $newLabel = '';
 
-                    if (request()->routeIs('items.*') && !request()->routeIs('items.trash') && auth()->user()->can('items.crear')) {
+                    if (request()->routeIs('items.*') && auth()->user()->can('items.crear')) {
                         $showNew = true; $newUrl = route('items.create'); $newLabel = '+ Nuevo';
                     } elseif (request()->routeIs('categorias.*') && auth()->user()->can('categorias.crear')) {
                         $showNew = true; $newUrl = route('categorias.create'); $newLabel = '+ Nueva';
@@ -143,16 +128,8 @@
 
             @can('items.ver')
                 <a href="{{ route('items.index') }}"
-                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.*') && !request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Items
-                </a>
-            @endcan
-
-            {{-- Papelera móvil: debe coincidir con el permiso que protege la ruta (items.papelera) --}}
-            @can('items.papelera')
-                <a href="{{ route('items.trash') }}"
-                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                    Papelera @if(($itemsTrashCount ?? 0) > 0) ({{ $itemsTrashCount }}) @endif
                 </a>
             @endcan
 
@@ -182,7 +159,7 @@
                 $mobileNewUrl = null;
                 $mobileNewLabel = null;
 
-                if (request()->routeIs('items.*') && !request()->routeIs('items.trash') && auth()->user()->can('items.crear')) {
+                if (request()->routeIs('items.*') && auth()->user()->can('items.crear')) {
                     $mobileNewUrl = route('items.create'); $mobileNewLabel = '+ Nuevo';
                 } elseif (request()->routeIs('categorias.*') && auth()->user()->can('categorias.crear')) {
                     $mobileNewUrl = route('categorias.create'); $mobileNewLabel = '+ Nueva';

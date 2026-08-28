@@ -22,7 +22,6 @@ beforeEach(function () {
         'items.editar',
         'items.cambiar_estado',
         'items.mover',
-        'items.restaurar',
     ] as $permission) {
         Permission::findOrCreate($permission, 'web');
     }
@@ -165,23 +164,6 @@ it('moveUbicacion hace rollback si falla el Movimiento y limpia la evidencia', f
     $this->assertDatabaseHas('items', ['id' => $item->id, 'ubicacion_id' => $ubicacionA->id]);
     $this->assertDatabaseCount('movimientos', 0);
     expect(Storage::disk('public')->allFiles('movimientos'))->toBe([]);
-});
-
-it('restore hace rollback si falla el Movimiento RESTAURAR', function () {
-    $user = User::factory()->create();
-    $user->givePermissionTo('items.restaurar');
-
-    $item = Item::create(['estado' => 'DISPONIBLE']);
-    $item->delete();
-
-    makeMovimientoCreationFail();
-
-    $response = $this->actingAs($user)->post(route('items.restore', $item->id));
-
-    $response->assertStatus(500);
-
-    $this->assertSoftDeleted('items', ['id' => $item->id]);
-    $this->assertDatabaseCount('movimientos', 0);
 });
 
 it('changeEstado sin cambios con evidencia no almacena evidencia ni crea Movimiento', function () {

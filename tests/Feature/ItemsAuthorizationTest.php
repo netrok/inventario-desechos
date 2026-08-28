@@ -3,6 +3,7 @@
 use App\Models\Item;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -15,10 +16,6 @@ beforeEach(function () {
         'items.ver',
         'items.crear',
         'items.editar',
-        'items.eliminar',
-        'items.papelera',
-        'items.restaurar',
-        'items.borrar_definitivo',
         'items.cambiar_estado',
         'items.mover',
     ] as $permission) {
@@ -63,37 +60,62 @@ it('bloquea editar a un usuario sin items.editar', function () {
         ->assertForbidden();
 });
 
-it('bloquea la papelera a un usuario sin items.papelera', function () {
+it('no registra rutas web de papelera ni de borrado de items', function () {
+    expect(Route::has('items.trash'))->toBeFalse();
+    expect(Route::has('items.restore'))->toBeFalse();
+    expect(Route::has('items.forceDelete'))->toBeFalse();
+    expect(Route::has('items.destroy'))->toBeFalse();
+});
+
+it('responde 404 para la antigua papelera /items-trash', function () {
     $user = User::factory()->create();
+    $user->givePermissionTo('items.ver');
 
     $this->actingAs($user)
         ->get('/items-trash')
-        ->assertForbidden();
+        ->assertNotFound();
 });
 
-it('permite ver la papelera con items.papelera sin items.eliminar', function () {
+it('responde 404 para el antiguo endpoint de restore', function () {
     $user = User::factory()->create();
-    $user->givePermissionTo('items.papelera');
-
-    $this->actingAs($user)
-        ->get('/items-trash')
-        ->assertOk();
-});
-
-it('exige items.restaurar para restaurar', function () {
-    $user = User::factory()->create();
+    $user->givePermissionTo('items.ver');
 
     $this->actingAs($user)
         ->post('/items/999999/restore')
-        ->assertForbidden();
+        ->assertNotFound();
 });
 
-it('exige items.borrar_definitivo para el borrado definitivo', function () {
+it('responde 404 para el antiguo endpoint de borrado definitivo', function () {
     $user = User::factory()->create();
+    $user->givePermissionTo('items.ver');
 
     $this->actingAs($user)
         ->delete('/items/999999/force')
-        ->assertForbidden();
+        ->assertNotFound();
+});
+
+it('no permite DELETE web de items', function () {
+    $item = Item::create(['estado' => 'DISPONIBLE']);
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.ver');
+
+    $this->actingAs($user)
+        ->delete(route('items.show', $item))
+        ->assertMethodNotAllowed();
+});
+
+it('no muestra botones de eliminar ni papelera en la vista de item', function () {
+    $item = Item::create(['estado' => 'DISPONIBLE']);
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.ver', 'items.editar');
+
+    $this->actingAs($user)
+        ->get(route('items.show', $item))
+        ->assertOk()
+        ->assertDontSee('Eliminar')
+        ->assertDontSee('Papelera')
+        ->assertDontSee('Enviar este item a la papelera')
+        ->assertDontSee('Ver papelera');
 });
 
 it('permite cambiar estado con items.cambiar_estado sin items.editar', function () {

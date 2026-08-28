@@ -49,12 +49,8 @@ class RolesAndAdminSeeder extends Seeder
             'items.ver',
             'items.crear',
             'items.editar',
-            'items.eliminar',
 
-            // Acciones extra (si las usas en rutas/middlewares)
-            'items.papelera',
-            'items.restaurar',
-            'items.borrar_definitivo',
+            // Acciones de ciclo de vida
             'items.cambiar_estado',
             'items.mover',
 
@@ -111,9 +107,8 @@ class RolesAndAdminSeeder extends Seeder
         // Almacén
         $almacenRole->syncPermissions([
             'dashboard.ver',
-            'items.ver', 'items.crear', 'items.editar', 'items.eliminar',
+            'items.ver', 'items.crear', 'items.editar',
             'items.cambiar_estado', 'items.mover',
-            'items.papelera', 'items.restaurar',
             'movimientos.ver',
             'categorias.ver',
             'ubicaciones.ver',
@@ -135,7 +130,6 @@ class RolesAndAdminSeeder extends Seeder
         $auditorRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
-            'items.papelera',
             'movimientos.ver',
             'categorias.ver',
             'ubicaciones.ver',

@@ -24,8 +24,6 @@ class DashboardController extends Controller
             ")
             ->first();
 
-        $trashCount = Item::onlyTrashed()->count();
-
         // Top ubicaciones por cantidad de items
         $topUbicaciones = Ubicacion::query()
             ->withCount('items')
@@ -59,7 +57,6 @@ class DashboardController extends Controller
 
         return view('dashboard', compact(
             'kpis',
-            'trashCount',
             'topUbicaciones',
             'topCategorias',
             'ultMovs',
