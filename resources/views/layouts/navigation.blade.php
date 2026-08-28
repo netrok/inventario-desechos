@@ -35,6 +35,20 @@
                         </a>
                     @endcan
 
+                    @can('ventas.crear')
+                        <a href="{{ route('pos.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('pos.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Punto de venta
+                        </a>
+                    @endcan
+
+                    @can('ventas.ver')
+                        <a href="{{ route('ventas.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('ventas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Ventas
+                        </a>
+                    @endcan
+
                     @can('reportes.ver')
                         <a href="{{ route('reports.index') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('reports.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
@@ -151,6 +165,20 @@
                 <a href="{{ route('items.scan') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.scan') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Escanear
+                </a>
+            @endcan
+
+            @can('ventas.crear')
+                <a href="{{ route('pos.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('pos.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Punto de venta
+                </a>
+            @endcan
+
+            @can('ventas.ver')
+                <a href="{{ route('ventas.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('ventas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Ventas
                 </a>
             @endcan
 

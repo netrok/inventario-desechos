@@ -33,10 +33,13 @@ dataset('matriz_rol_permisos', [
         'reportes.ver',
         'categorias.ver',
         'ubicaciones.ver',
+        'ventas.ver',
     ]],
     'Ventas' => ['Ventas', [
         'dashboard.ver',
         'items.ver',
+        'ventas.ver',
+        'ventas.crear',
     ]],
 ]);
 
@@ -57,13 +60,11 @@ it('cumple la matriz final de permisos por rol', function (string $rol, ?array $
     expect($reales)->toBe($esperado);
 })->with('matriz_rol_permisos');
 
-it('el fresh no crea permisos de ventas, papelera ni catálogos huérfanos', function () {
+it('el fresh no crea permisos huérfanos de ventas, papelera ni catálogos', function () {
     expect(Permission::whereIn('name', [
         'catalogos.ver',
         'catalogos.editar',
         'movimientos.ver',
-        'ventas.ver',
-        'ventas.crear',
         'ventas.cerrar',
         'items.eliminar',
         'items.papelera',
@@ -195,4 +196,81 @@ it('la ruta de usuarios bloquea a quien no tiene usuarios.ver aunque tenga rol',
     $this->actingAs($sinPermiso)
         ->get(route('admin.users.index'))
         ->assertForbidden();
+});
+
+it('el rol Ventas accede al POS y al listado de ventas y puede confirmar', function () {
+    $user = User::factory()->create();
+    $user->assignRole('Ventas');
+
+    $this->actingAs($user)->get(route('pos.index'))->assertOk();
+    $this->actingAs($user)->get(route('ventas.index'))->assertOk();
+
+    // El middleware ventas.crear no bloquea: la validación sigue su curso (redirect).
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), ['items' => [1], 'forma_pago' => 'EFECTIVO'])
+        ->assertStatus(302);
+});
+
+it('el rol Auditor consulta el historico de ventas pero el POS queda bloqueado', function () {
+    $vendedor = User::factory()->create();
+    $venta = \App\Models\Venta::create([
+        'user_id' => $vendedor->id,
+        'total' => 100,
+        'forma_pago' => 'EFECTIVO',
+    ]);
+    $user = User::factory()->create();
+    $user->assignRole('Auditor');
+
+    $this->actingAs($user)->get(route('ventas.index'))->assertOk();
+    $this->actingAs($user)->get(route('ventas.show', $venta))->assertOk();
+
+    // El POS es operativo: requiere ventas.crear, Auditor no lo tiene.
+    $this->actingAs($user)->get(route('pos.index'))->assertForbidden();
+    $this->actingAs($user)->post(route('pos.add'), ['codigo' => 'ITM-000001'])->assertForbidden();
+    $this->actingAs($user)->post(route('pos.remove'), ['item_id' => 1])->assertForbidden();
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), ['items' => [1], 'forma_pago' => 'EFECTIVO'])
+        ->assertForbidden();
+});
+
+it('sin ventas.ver no se puede consultar el POS ni las ventas', function () {
+    $user = User::factory()->create();
+    $user->assignRole('Operador');
+
+    $this->actingAs($user)->get(route('pos.index'))->assertForbidden();
+    $this->actingAs($user)->get(route('ventas.index'))->assertForbidden();
+});
+
+it('con ventas.ver pero sin ventas.crear no se puede operar el POS', function () {
+    $user = User::factory()->create();
+    $user->assignRole('Operador');
+    $user->givePermissionTo('ventas.ver');
+
+    $this->actingAs($user)->get(route('pos.index'))->assertForbidden();
+    $this->actingAs($user)->get(route('ventas.index'))->assertOk();
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), ['items' => [1], 'forma_pago' => 'EFECTIVO'])
+        ->assertForbidden();
+});
+
+it('el rol Almacen no accede al POS ni a las ventas', function () {
+    $user = User::factory()->create();
+    $user->assignRole('Almacen');
+
+    $this->actingAs($user)->get(route('pos.index'))->assertForbidden();
+    $this->actingAs($user)->get(route('ventas.index'))->assertForbidden();
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), ['items' => [1], 'forma_pago' => 'EFECTIVO'])
+        ->assertForbidden();
+});
+
+it('el rol Admin puede operar el POS y consultar ventas', function () {
+    $user = User::factory()->create();
+    $user->assignRole('Admin');
+
+    $this->actingAs($user)->get(route('pos.index'))->assertOk();
+    $this->actingAs($user)->get(route('ventas.index'))->assertOk();
 });

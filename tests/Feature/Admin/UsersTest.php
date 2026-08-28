@@ -70,3 +70,56 @@ it('allows admin to create a user and assign roles', function () {
     $user = User::where('email', 'juan@test.com')->firstOrFail();
     expect($user->hasRole('Operador'))->toBeTrue();
 });
+
+it('impide a un Admin borrar un usuario que tiene ventas y conserva el actor', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin');
+
+    $vendedor = User::factory()->create();
+    $venta = \App\Models\Venta::create([
+        'user_id' => $vendedor->id,
+        'total' => 250.5,
+        'forma_pago' => 'EFECTIVO',
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->delete(route('admin.users.destroy', $vendedor));
+
+    // Sin 500: feedback limpio a la UI.
+    $response->assertSessionHas('error', 'No se puede eliminar este usuario porque tiene ventas registradas.');
+
+    $this->assertDatabaseHas('users', ['id' => $vendedor->id]);
+    $this->assertDatabaseHas('ventas', ['id' => $venta->id, 'user_id' => $vendedor->id]);
+});
+
+it('conserva la regla de no eliminar al ultimo Admin', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin'); // único Admin
+
+    // Usuario sin rol Admin pero con permiso de eliminación.
+    $manager = User::factory()->create();
+    $manager->givePermissionTo('usuarios.eliminar');
+
+    $this->actingAs($manager)
+        ->delete(route('admin.users.destroy', $admin))
+        ->assertSessionHas('error', 'No puedes eliminar al último Admin.');
+
+    $this->assertDatabaseHas('users', ['id' => $admin->id]);
+});
+
+it('permite a un Admin borrar un usuario sin ventas (y sin ser ultimo admin)', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin');
+
+    $otroAdmin = User::factory()->create();
+    $otroAdmin->assignRole('Admin');
+
+    $vendedor = User::factory()->create();
+    $vendedor->assignRole('Operador');
+
+    $this->actingAs($admin)
+        ->delete(route('admin.users.destroy', $vendedor))
+        ->assertRedirect('/admin/users');
+
+    $this->assertDatabaseMissing('users', ['id' => $vendedor->id]);
+});

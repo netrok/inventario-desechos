@@ -22,8 +22,8 @@ class UpdateItemRequest extends FormRequest
         return [
             'codigo' => ['nullable', 'string', 'max:40', Rule::unique('items', 'codigo')->ignore($id)],
 
-            'serie'  => ['nullable', 'string', 'max:120'],
-            'marca'  => ['nullable', 'string', 'max:80'],
+            'serie' => ['nullable', 'string', 'max:120'],
+            'marca' => ['nullable', 'string', 'max:80'],
             'modelo' => ['nullable', 'string', 'max:120'],
 
             // ✅ Catálogo real
@@ -33,6 +33,9 @@ class UpdateItemRequest extends FormRequest
             'estado' => ['required', Rule::in(Item::ESTADOS)],
 
             'notas' => ['nullable', 'string', 'max:1000'],
+
+            // ✅ Precio de venta
+            'precio' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
 
             // ✅ Foto opcional
             'foto' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
@@ -50,6 +53,7 @@ class UpdateItemRequest extends FormRequest
             'categoria_id.exists' => 'La categoría seleccionada no existe.',
             'ubicacion_id.required' => 'Selecciona una ubicación.',
             'ubicacion_id.exists' => 'La ubicación seleccionada no existe.',
+            'precio.numeric' => 'El precio debe ser numérico.',
             'foto.image' => 'El archivo debe ser una imagen.',
         ];
     }

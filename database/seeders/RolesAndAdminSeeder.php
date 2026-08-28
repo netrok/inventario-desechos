@@ -57,6 +57,10 @@ class RolesAndAdminSeeder extends Seeder
             // Reportes
             'reportes.ver',
 
+            // Ventas / Punto de venta
+            'ventas.ver',
+            'ventas.crear',
+
             // Categorías
             'categorias.ver',
             'categorias.crear',
@@ -104,10 +108,12 @@ class RolesAndAdminSeeder extends Seeder
             'ubicaciones.ver', 'ubicaciones.crear', 'ubicaciones.editar',
         ]);
 
-        // Ventas (consulta mínima; sin POS todavía)
+        // Ventas (POS: consulta + registro de ventas)
         $ventasRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
+            'ventas.ver',
+            'ventas.crear',
         ]);
 
         // Auditor (solo lectura)
@@ -117,6 +123,7 @@ class RolesAndAdminSeeder extends Seeder
             'reportes.ver',
             'categorias.ver',
             'ubicaciones.ver',
+            'ventas.ver',
         ]);
 
         /**

@@ -102,6 +102,11 @@ class UserController extends Controller
             }
         }
 
+        // No borrar un usuario con ventas: perdería el actor histórico.
+        if ($user->ventas()->exists()) {
+            return back()->with('error', 'No se puede eliminar este usuario porque tiene ventas registradas.');
+        }
+
         $user->delete();
 
         return redirect()

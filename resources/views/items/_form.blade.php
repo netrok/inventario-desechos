@@ -126,6 +126,22 @@
                 @error('estado') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
             </div>
 
+            {{-- Precio de venta (editable) --}}
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Precio de venta</label>
+                <input
+                    name="precio"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value="{{ old('precio', $item->precio ?? '') }}"
+                    placeholder="0.00"
+                    class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('precio') border-rose-300 ring-rose-200 @enderror"
+                >
+                @error('precio') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                <div class="mt-1 text-xs text-gray-500">Requerido para vender el equipo desde el POS.</div>
+            </div>
+
             {{-- Ubicación --}}
             <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">Ubicación</label>

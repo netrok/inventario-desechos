@@ -3,9 +3,11 @@
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UbicacionController;
+use App\Http\Controllers\VentaController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('dashboard'));
@@ -107,6 +109,43 @@ Route::middleware(['auth'])->group(function () {
     Route::get('items/{item}/label', [ItemController::class, 'label'])->name('items.label')->middleware('permission:items.ver');
     Route::get('items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit')->middleware('permission:items.editar');
     Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update')->middleware('permission:items.editar');
+
+    /**
+     * =========================
+     * Punto de venta (POS operativo: ventas.crear)
+     * =========================
+     */
+    // POS / ventas
+    Route::get('pos', [PosController::class, 'index'])
+        ->name('pos.index')
+        ->middleware('permission:ventas.crear');
+
+    // Acciones sobre el carrito (solo ventas.crear; Auditor es solo lectura)
+    Route::post('pos/agregar', [PosController::class, 'add'])
+        ->name('pos.add')
+        ->middleware('permission:ventas.crear');
+
+    Route::post('pos/quitar', [PosController::class, 'remove'])
+        ->name('pos.remove')
+        ->middleware('permission:ventas.crear');
+
+    // Confirmación de venta (atómica)
+    Route::post('pos/checkout', [PosController::class, 'checkout'])
+        ->name('pos.checkout')
+        ->middleware('permission:ventas.crear');
+
+    /**
+     * =========================
+     * Consulta histórica de ventas (ventas.ver)
+     * =========================
+     */
+    Route::get('ventas', [VentaController::class, 'index'])
+        ->name('ventas.index')
+        ->middleware('permission:ventas.ver');
+
+    Route::get('ventas/{venta}', [VentaController::class, 'show'])
+        ->name('ventas.show')
+        ->middleware('permission:ventas.ver');
 
     /**
      * =========================

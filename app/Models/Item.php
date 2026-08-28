@@ -33,6 +33,7 @@ class Item extends Model
         'estado',
         'ubicacion_id',
         'notas',
+        'precio',
         'foto_path',
     ];
 
@@ -40,6 +41,7 @@ class Item extends Model
         'codigo_seq' => 'integer',
         'categoria_id' => 'integer',
         'ubicacion_id' => 'integer',
+        'precio' => 'decimal:2',
     ];
 
     protected static function booted(): void
