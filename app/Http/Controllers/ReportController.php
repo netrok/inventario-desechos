@@ -46,10 +46,17 @@ class ReportController extends Controller
         $validated = $request->validate([
             'alta_desde' => ['nullable', 'date'],
             'alta_hasta' => ['nullable', 'date'],
+            'codigo' => ['nullable', 'string', 'max:40'],
+            'marca' => ['nullable', 'string', 'max:80'],
+            'modelo' => ['nullable', 'string', 'max:120'],
+            'serie' => ['nullable', 'string', 'max:120'],
+            'estado' => ['nullable', Rule::in(Item::ESTADOS)],
+            'ubicacion_id' => ['nullable', 'integer', 'exists:ubicaciones,id'],
+            'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
         ]);
 
-        $ubicacionId = $request->get('ubicacion_id') ?: null;
-        $categoriaId = $request->get('categoria_id') ?: null;
+        $ubicacionId = ! empty($validated['ubicacion_id']) ? $validated['ubicacion_id'] : null;
+        $categoriaId = ! empty($validated['categoria_id']) ? $validated['categoria_id'] : null;
 
         $altaDesde = ! empty($validated['alta_desde']) ? Carbon::parse($validated['alta_desde']) : null;
         $altaHasta = ! empty($validated['alta_hasta']) ? Carbon::parse($validated['alta_hasta']) : null;
@@ -61,13 +68,13 @@ class ReportController extends Controller
         }
 
         return [
-            'codigo' => trim((string) $request->get('codigo', '')),
+            'codigo' => trim((string) ($validated['codigo'] ?? '')),
             'alta_desde' => $altaDesde,
             'alta_hasta' => $altaHasta,
-            'marca' => trim((string) $request->get('marca', '')),
-            'modelo' => trim((string) $request->get('modelo', '')),
-            'serie' => trim((string) $request->get('serie', '')),
-            'estado' => $request->get('estado') ?: null,
+            'marca' => trim((string) ($validated['marca'] ?? '')),
+            'modelo' => trim((string) ($validated['modelo'] ?? '')),
+            'serie' => trim((string) ($validated['serie'] ?? '')),
+            'estado' => $validated['estado'] ?? null,
             'ubicacion_id' => $ubicacionId,
             'categoria_id' => $categoriaId,
 

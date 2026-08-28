@@ -1,7 +1,6 @@
 # Inventario Desechos (Laravel)
 
-Sistema web para **inventario de desechos/equipos** con control de **items**, **estados**, **ubicaciones** y **trazabilidad (movimientos)**.
-Incluye carga de **foto** (se guarda el archivo en `storage` y solo la ruta en BD).
+Sistema web de **inventario y ventas** para equipos/desechos tecnológicos. Controla el ciclo de vida de cada equipo (`Item`), su trazabilidad completa (movimientos), catálogos (categorías/ubicaciones), acceso por roles, un Mini POS con ventas atómicas y tickets térmicos imprimibles.
 
 ---
 
@@ -9,156 +8,132 @@ Incluye carga de **foto** (se guarda el archivo en `storage` y solo la ruta en B
 
 - Laravel 12
 - PHP 8.4+
-- PostgreSQL
-- Tailwind (Blade)
-- Spatie Permission (permisos por módulo)
+- PostgreSQL (numeración por *sequences*, dinero `numeric(12,2)` sin float)
+- Blade + Tailwind (Vite)
+- Spatie Permission (roles/permisos)
+- Laravel Breeze (autenticación)
+- DomPDF / Maatwebsite Excel (reportes PDF/XLSX)
 
 ---
 
-## Requisitos
+## Módulos existentes
 
-- PHP 8.4+
-- Composer
-- PostgreSQL
-- Node.js + npm (si vas a compilar assets)
+| Módulo | Descripción |
+|---|---|
+| **Dashboard** | KPIs: total por estado, top ubicaciones/categorías, últimos movimientos. |
+| **Items** | Alta/edición/consulta con `codigo` autogenerado, foto opcional, estados, filtros, exportación PDF/XLSX. |
+| **Captura rápida** | Alta veloz con formulario mínimo y re-alta inmediata. |
+| **Scanner** | Búsqueda por código (`items.scan`) pensado para scanner USB tipo teclado (normaliza trim + mayúsculas). |
+| **Etiquetas** | Ticket imprimible `50×30mm` con QR del `codigo`. |
+| **Categorías** | Catálogo con nombre único. |
+| **Ubicaciones** | Catálogo con nombre único y descripción. |
+| **Reportes** | Inventario y movimientos (web, PDF, XLSX) con filtros y trazabilidad. |
+| **Usuarios** | CRUD completo con asignación de roles (no se puede borrar el último Admin ni a quien tiene ventas). |
+| **Roles/permisos** | Matriz fija de 21 permisos en 4 grupos operativos + 2 roles legacy. |
+| **Mini POS** | Carrito por sesión, escáner para agregar, venta atómica con `lockForUpdate`. |
+| **Ventas** | Folio `VTA-XXXXXX`, detalle, actor (`user_id`) con FK RESTRICT. |
+| **Tickets** | Impresión/reimpresión web de comprobante térmico 80mm/58mm con precios históricos. |
+
+## Lo que NO existe (por diseño)
+
+- ecommerce / catálogo público
+- CFDI / facturación / IVA
+- cuentas por cobrar
+- devoluciones
+- promociones / descuentos
+- cierre de caja
+- impresión directa ESC/POS (la impresión es vía navegador `window.print()`)
+- borrado operacional de Items (el flujo es `BAJA`, no eliminar)
 
 ---
 
-## Instalación (local)
+## Identidad y ciclo de vida
 
-1. Clonar y entrar al repositorio.
-2. Instalar dependencias PHP:
+- Cada `Item` recibe un código único `ITM-XXXXXX` desde la secuencia PostgreSQL `items_codigo_seq_generator`. Los huecos numéricos son normales y no se reutilizan.
+- Estados: `DISPONIBLE`, `RESERVADO`, `REPARACION`, `VENDIDO`, `BAJA`.
+- `VENDIDO` y `BAJA` son **terminales** (las transiciones se validan en servidor con row lock).
+- `SoftDeletes` existe como **salvaguarda técnica/legacy**: NO hay papelería operativa ni rutas de restaurar/borrar definitivo.
+- Cada operación relevante genera un `Movimiento` con estado anterior/posterior, ubicación, usuario actor y evidencia opcional.
 
-   ```bash
-   composer install
-   ```
+---
 
-3. Variables de entorno:
+## Roles y permisos
 
-   ```bash
-   cp .env.example .env
-   php artisan key:generate
-   ```
+**Canon (21 permisos):**
+`dashboard.ver` · `items.ver` · `items.crear` · `items.editar` · `items.cambiar_estado` · `items.mover` · `reportes.ver` · `categorias.ver|crear|editar|eliminar` · `ubicaciones.ver|crear|editar|eliminar` · `usuarios.ver|crear|editar|eliminar` · `ventas.ver` · `ventas.crear`
 
-4. Configurar la base de datos en `.env` (ver sección Base de datos).
-5. Migraciones y seed:
+| Rol | Permisos |
+|---|---|
+| **Admin** | Los 21. |
+| **Almacen** | Dashboard, items (ver/crear/editar/cambiar_estado/mover), reportes, categorías y ubicaciones (sin eliminar). Sin ventas ni usuarios. |
+| **Auditor** | Solo lectura + reportes + histórico de ventas. Sin escritura, sin POS. |
+| **Ventas** | `dashboard.ver`, `items.ver`, `ventas.ver`, `ventas.crear`. |
+| **Operador / Consulta** | Legacy, 0 permisos. |
 
-   ```bash
-   php artisan migrate
-   php artisan db:seed
-   ```
+---
 
-6. Storage link (fotos):
-
-   ```bash
-   php artisan storage:link
-   ```
-
-Las fotos se guardan en `storage/app/public/items/...` y se acceden desde `/storage/items/...`.
-
-Assets (Tailwind/Vite):
+## Instalación (desarrollo)
 
 ```bash
+git clone <repo> && cd inventario-desechos
+composer install
 npm install
-npm run dev   # o: npm run build
+
+cp .env.example .env
+php artisan key:generate
+# configurar DB (PostgreSQL) en .env
+
+php artisan migrate
+php artisan db:seed --class=RolesAndAdminSeeder --class=CatalogosBaseSeeder
+php artisan storage:link
+
+npm run dev        # Tailwind/Vite
+php artisan serve  # o tu servidor web
+```
+
+> En el seeder el **Admin inicial** se crea ÚNICAMENTE si definís `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD` (juntos, min. 12 caracteres) en el entorno. Nunca hay contraseña por defecto en el repositorio.
+
+## Testing
+
+```bash
+cp .env.testing.example .env.testing   # DB de pruebas aislada
+php artisan test                       # suite completa (194 tests / 619 assertions)
+php artisan migrate:fresh --seed --env=testing   # instala limpia de pruebas
+```
+
+La suite cubre matriz de roles, atomicidad del POS, dinero exacto en centavos, ticket con precios históricos, FK/UNIQUE de PostgreSQL y trazabilidad.
+
+---
+
+## Producción / deploy
+
+Ver [docs/DEPLOY.md](docs/DEPLOY.md) (requisitos, variables, migraciones, seed seguro, build, web server, HTTPS, cachés, rollback) y [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) (respaldo/restauración de PostgreSQL + storage) y [docs/CHECKLIST_PRE_DEPLOY.md](docs/CHECKLIST_PRE_DEPLOY.md).
+
+Resumen de comandos clave:
+
+```bash
+php artisan migrate --force                # nunca migrate:fresh en producción
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+php artisan optimize
 ```
 
 ---
 
-## Base de datos
+## Seguridad básica
 
-Motor: PostgreSQL.
-
-Configuración conceptual para `.env`:
-
-```env
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_DATABASE=inventario_desechos
-DB_USERNAME=postgres
-DB_PASSWORD=
-```
+- Todas las rutas funcionales exigen `auth` + permiso por middleware; las únicas públicas son login/recuperación de contraseña y el healthcheck `/up`.
+- CSRF activo en todos los formularios; login con rate limiting (RateLimiter, 5 intentos); verificación de email firmada.
+- Cabeceras mínimas en todas las respuestas (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`); CSP recomendada vía web server.
+- Dinero sin float: persistencia **PostgreSQL `numeric(12,2)`** (`items.precio`, `ventas.total`, `venta_detalles.precio`); en PHP se **calcula en centavos enteros** (decimal de BD → centavos → suma exacta → decimal string) y se presenta con helper sin float; el ticket usa el precio histórico de `VentaDetalle`.
+- No se suben `.env` (`.gitignore`); backups incluyen PostgreSQL + `storage/app` + configuración.
 
 ---
 
-## Funcionalidades principales
+## Notas técnicas
 
-### Items
-
-- Alta, edición y consulta.
-- Generación automática de código `ITM-XXXXXX` vía la secuencia PostgreSQL `items_codigo_seq_generator` (código único; los huecos numéricos son válidos y el sistema no reutiliza valores).
-- Estados de ciclo de vida: `DISPONIBLE`, `RESERVADO`, `REPARACION`, `VENDIDO`, `BAJA`.
-- Foto opcional: el archivo se guarda en `storage` y en BD solo `foto_path`.
-- Filtros por búsqueda/estado/ubicación y KPIs por estado.
-- Exportación XLSX y PDF.
-
-### Ciclo de vida
-
-Un Item registrado no se elimina como flujo operativo.
-
-- `BAJA` retira el equipo de operación, conserva el registro y conserva su trazabilidad.
-- `VENDIDO` conserva el Item, registra un Movimiento y no elimina físicamente el equipo.
-
-El cambio de estado se realiza con `items.cambiar_estado`.
-
-### SoftDeletes
-
-- SoftDeletes técnico: SÍ
-- Papelera operativa: NO
-
-SoftDeletes se conserva internamente por compatibilidad y seguridad técnica (columna `deleted_at`). La Papelera fue retirada del flujo web: no existe interfaz ni ruta web normal para borrar o restaurar Items.
-
-### Trazabilidad
-
-Las operaciones relevantes generan Movimientos:
-
-- `ALTA`
-- `CAMBIO_ESTADO`
-- `TRASLADO`
-- `AJUSTE`
-- `BAJA`
-- `VENTA`
-
-El tipo `RESTAURAR` solo puede existir como tipo histórico legacy, no como funcionalidad web actual.
-
-### Atomicidad
-
-- Item + Movimiento se procesan en transacciones.
-- Los cambios concurrentes de estado/ubicación usan row locks (`lockForUpdate`).
-- Un fallo provoca rollback.
-- Las fotos/evidencias nuevas se limpian ante fallo; la foto anterior solo se elimina después de confirmarse el cambio.
-
----
-
-## Permisos actuales de Items
-
-- `items.ver`
-- `items.crear`
-- `items.editar`
-- `items.cambiar_estado`
-- `items.mover`
-
----
-
-## No implementado aún
-
-- Captura rápida
-- Escaneo con scanner
-- QR / etiquetas
-- Reportes nuevos
-- POS
-- Tickets
-
----
-
-## Notas de despliegue
-
-- No subir `.env` al repositorio (usar `.env.example`).
-- No subir `vendor/` ni `node_modules/`.
-- Las fotos quedan en `storage` (no versionar).
-- En producción, configurar `APP_URL` y ejecutar `php artisan storage:link`.
-- La versión que usa `nextval('items_codigo_seq_generator')` requiere la migración `2026_08_27_140000_create_items_codigo_sequence.php` aplicada.
+- Secuencias PostgreSQL: `items_codigo_seq_generator`, `ventas_folio_seq_generator` (nunca `MAX()+1`; los gaps son normales).
+- FKs críticas: `movimientos.item_id → items (RESTRICT)`, `venta_detalles.item_id → items (RESTRICT + UNIQUE)`, `ventas.user_id → users (RESTRICT + NOT NULL)`.
+- Listados principales paginados (15/25) y con eager loading (sin N+1).
 
 ---
 

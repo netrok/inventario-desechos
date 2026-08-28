@@ -133,9 +133,10 @@ class RolesAndAdminSeeder extends Seeder
          * mediante variables de entorno. Nunca deben existir credenciales
          * predeterminadas dentro del repositorio.
          */
-        $adminEmail = env('SEED_ADMIN_EMAIL');
-        $adminPass = env('SEED_ADMIN_PASSWORD');
-        $adminName = env('SEED_ADMIN_NAME', 'Admin');
+        // vía config('seeding.*') para que funcione aunque config:cache esté activo.
+        $adminEmail = config('seeding.admin_email');
+        $adminPass = config('seeding.admin_password');
+        $adminName = config('seeding.admin_name', 'Admin');
 
         if (($adminEmail && ! $adminPass) || (! $adminEmail && $adminPass)) {
             throw new \RuntimeException(
