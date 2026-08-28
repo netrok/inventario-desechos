@@ -24,7 +24,6 @@ beforeEach(function () {
         'usuarios.crear',
         'usuarios.editar',
         'usuarios.eliminar',
-        'usuarios.roles',
     ];
 
     foreach ($userPermissions as $permission) {

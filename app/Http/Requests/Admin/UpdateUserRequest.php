@@ -9,7 +9,7 @@ class UpdateUserRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('Admin') ?? false;
+        return $this->user()?->can('usuarios.editar') ?? false;
     }
 
     public function rules(): array
@@ -17,14 +17,14 @@ class UpdateUserRequest extends FormRequest
         $userId = $this->route('user')?->id;
 
         return [
-            'name' => ['required','string','max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'email' => [
-                'required','email','max:255',
-                Rule::unique('users','email')->ignore($userId),
+                'required', 'email', 'max:255',
+                Rule::unique('users', 'email')->ignore($userId),
             ],
-            'password' => ['nullable','string','min:8','max:255'],
-            'roles' => ['nullable','array'],
-            'roles.*' => ['string','exists:roles,name'],
+            'password' => ['nullable', 'string', 'min:8', 'max:255'],
+            'roles' => ['nullable', 'array'],
+            'roles.*' => ['string', 'exists:roles,name'],
         ];
     }
 }

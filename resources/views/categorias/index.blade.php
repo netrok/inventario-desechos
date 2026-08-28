@@ -14,10 +14,12 @@
             ← Items
           </a>
 
-          <a href="{{ route('categorias.create') }}"
-             class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-black">
-            + Nueva
-          </a>
+          @can('categorias.crear')
+            <a href="{{ route('categorias.create') }}"
+               class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-black">
+              + Nueva
+            </a>
+          @endcan
         </div>
       </div>
 
@@ -69,19 +71,23 @@
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex justify-end gap-2">
-                      <a href="{{ route('categorias.edit', $c) }}"
-                         class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">
-                        Editar
-                      </a>
+                      @can('categorias.editar')
+                        <a href="{{ route('categorias.edit', $c) }}"
+                           class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">
+                          Editar
+                        </a>
+                      @endcan
 
-                      <form method="POST" action="{{ route('categorias.destroy', $c) }}"
-                            onsubmit="return confirm('¿Eliminar categoría?');">
-                        @csrf
-                        @method('DELETE')
-                        <button class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-100">
-                          Eliminar
-                        </button>
-                      </form>
+                      @can('categorias.eliminar')
+                        <form method="POST" action="{{ route('categorias.destroy', $c) }}"
+                              onsubmit="return confirm('¿Eliminar categoría?');">
+                          @csrf
+                          @method('DELETE')
+                          <button class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-100">
+                            Eliminar
+                          </button>
+                        </form>
+                      @endcan
                     </div>
                   </td>
                 </tr>

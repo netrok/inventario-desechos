@@ -1,19 +1,19 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\UserController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
 | Admin Routes
 |--------------------------------------------------------------------------
-| Requiere login + rol Admin.
-| Cada acción de usuarios se protege por permiso específico.
+| Requiere login.
+| Cada acción de usuarios se protege por permiso específico (usuarios.*).
 */
 
 Route::prefix('admin')
     ->name('admin.')
-    ->middleware(['auth', 'role:Admin'])
+    ->middleware(['auth'])
     ->group(function () {
 
         // Usuarios - listado

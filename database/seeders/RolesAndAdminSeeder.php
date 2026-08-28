@@ -54,9 +54,6 @@ class RolesAndAdminSeeder extends Seeder
             'items.cambiar_estado',
             'items.mover',
 
-            // Movimientos
-            'movimientos.ver',
-
             // Reportes
             'reportes.ver',
 
@@ -72,21 +69,11 @@ class RolesAndAdminSeeder extends Seeder
             'ubicaciones.editar',
             'ubicaciones.eliminar',
 
-            // Catálogos genéricos (opcional)
-            'catalogos.ver',
-            'catalogos.editar',
-
-            // Usuarios / Admin (opcional pero recomendado)
+            // Usuarios / Admin
             'usuarios.ver',
             'usuarios.crear',
             'usuarios.editar',
             'usuarios.eliminar',
-            'usuarios.roles',
-
-            // Ventas (opcional)
-            'ventas.ver',
-            'ventas.crear',
-            'ventas.cerrar',
         ];
 
         foreach ($perms as $p) {
@@ -107,39 +94,29 @@ class RolesAndAdminSeeder extends Seeder
         // Admin = todo
         $adminRole->syncPermissions($perms);
 
-        // Almacén
+        // Almacén (operativo de inventario)
         $almacenRole->syncPermissions([
             'dashboard.ver',
             'items.ver', 'items.crear', 'items.editar',
             'items.cambiar_estado', 'items.mover',
-            'movimientos.ver',
             'reportes.ver',
-            'categorias.ver',
-            'ubicaciones.ver',
-            'catalogos.ver',
+            'categorias.ver', 'categorias.crear', 'categorias.editar',
+            'ubicaciones.ver', 'ubicaciones.crear', 'ubicaciones.editar',
         ]);
 
-        // Ventas
+        // Ventas (consulta mínima; sin POS todavía)
         $ventasRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
-            'items.cambiar_estado',
-            'movimientos.ver',
-            'ventas.ver', 'ventas.crear', 'ventas.cerrar',
-            'categorias.ver',
-            'ubicaciones.ver',
         ]);
 
         // Auditor (solo lectura)
         $auditorRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
-            'movimientos.ver',
             'reportes.ver',
             'categorias.ver',
             'ubicaciones.ver',
-            'catalogos.ver',
-            'ventas.ver',
         ]);
 
         /**
