@@ -56,6 +56,44 @@
                 </div>
             @endif
 
+            {{-- Cliente (snapshot histórico) --}}
+            <div class="rounded-2xl border border-gray-200 bg-white p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Cliente</div>
+                @if($venta->cliente_historico)
+                    @php $ch = $venta->cliente_historico; @endphp
+                    <div class="mt-2 grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div class="md:col-span-2">
+                            <div class="text-sm font-semibold text-gray-900">
+                                {{ $ch['nombre'] }}
+                                @if($venta->cliente)
+                                    @can('clientes.ver')
+                                        <a href="{{ route('clientes.show', $venta->cliente) }}"
+                                           class="ml-1 text-xs font-medium text-teal-700 hover:underline">{{ $ch['codigo'] }}</a>
+                                    @endcan
+                                @else
+                                    <span class="text-xs text-gray-400">{{ $ch['codigo'] }}</span>
+                                @endif
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                {{ $ch['tipo'] }}
+                                @if($ch['rfc']) · RFC {{ $ch['rfc'] }} @endif
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-700">
+                            @if($ch['telefono']) <div>Tel: {{ $ch['telefono'] }}</div> @endif
+                            @if($ch['email']) <div>Email: {{ $ch['email'] }}</div> @endif
+                        </div>
+                    </div>
+                    @if(! $venta->cliente)
+                        <p class="mt-2 text-xs text-gray-400">Datos históricos: el cliente ya no existe en el catálogo.</p>
+                    @endif
+                @else
+                    <div class="mt-1 text-sm text-gray-500">
+                        Cliente no registrado (venta histórica / anterior al módulo de clientes).
+                    </div>
+                @endif
+            </div>
+
             {{-- Datos de la venta --}}
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="rounded-2xl border border-gray-200 bg-white p-4">

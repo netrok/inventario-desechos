@@ -82,6 +82,16 @@ class RolesAndAdminSeeder extends Seeder
             'usuarios.crear',
             'usuarios.editar',
             'usuarios.eliminar',
+
+            // Clientes
+            'clientes.ver',
+            'clientes.crear',
+            'clientes.editar',
+            'clientes.desactivar',
+
+            // Configuración general
+            'configuracion.ver',
+            'configuracion.editar',
         ];
 
         foreach ($perms as $p) {
@@ -114,15 +124,20 @@ class RolesAndAdminSeeder extends Seeder
 
         // Ventas (POS: consulta + registro de ventas + devoluciones; NO cancela).
         // La cancelación es una reversa financiera total reservada a Admin.
+        // Clientes: puede ver/crear/editar (para POS necesita clientes), pero
+        // NO desactivar (acción de control reservada a Admin).
         $ventasRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
             'ventas.ver',
             'ventas.crear',
             'ventas.devolver',
+            'clientes.ver',
+            'clientes.crear',
+            'clientes.editar',
         ]);
 
-        // Auditor (solo lectura)
+        // Auditor (solo lectura) + consulta de configuración y clientes.
         $auditorRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
@@ -130,6 +145,8 @@ class RolesAndAdminSeeder extends Seeder
             'categorias.ver',
             'ubicaciones.ver',
             'ventas.ver',
+            'clientes.ver',
+            'configuracion.ver',
         ]);
 
         /**

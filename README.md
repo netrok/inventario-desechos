@@ -29,10 +29,12 @@ Sistema web de **inventario y ventas** para equipos/desechos tecnológicos. Cont
 | **Ubicaciones** | Catálogo con nombre único y descripción. |
 | **Reportes** | Inventario y movimientos (web, PDF, XLSX) con filtros y trazabilidad. |
 | **Usuarios** | CRUD completo con asignación de roles (el último Admin no puede eliminarse ni perder el rol Admin; los usuarios con ventas o movimientos históricos no pueden eliminarse). |
-| **Roles/permisos** | Matriz fija de 23 permisos en 4 grupos operativos + 2 roles legacy. |
-| **Mini POS** | Carrito por sesión, escáner para agregar, venta atómica con `lockForUpdate`. |
-| **Ventas** | Folio `VTA-XXXXXX`, detalle, actor (`user_id`) con FK RESTRICT. |
-| **Tickets** | Impresión/reimpresión web de comprobante térmico 80mm/58mm con precios históricos. |
+| **Roles/permisos** | Matriz fija de 29 permisos en 4 grupos operativos + 2 roles legacy. |
+| **Clientes** | Catálogo de personas/empresas con código `CLI-XXXXXX`, ciclo de vida ACTIVO/INACTIVO (sin borrado físico), búsqueda server-side y ficha con historial de ventas. |
+| **Configuración** | Tabla singleton con identidad de la empresa y preferencias del ticket térmico (ancho 58/80mm y autoprint). Solo datos no sensibles. |
+| **Mini POS** | Carrito por sesión, escáner para agregar, selección/alta rápida de cliente, venta atómica con `lockForUpdate`. El cliente es obligatorio y se guarda un snapshot histórico. |
+| **Ventas** | Folio `VTA-XXXXXX`, detalle, actor (`user_id`) con FK RESTRICT, cliente obligatorio con snapshot `cliente_codigo/nombre/rfc/telefono/email/tipo`. |
+| **Tickets** | Impresión/reimpresión web de comprobante térmico 80mm/58mm con precios históricos e impresión automática opcional (chromium `--kiosk-printing`). |
 | **Postventa** | Cancelación total y devoluciones (parciales/totales) **atómicas** (`DB::transaction` + `lockForUpdate` con orden determinista). Generan documento `DEV-XXXXXX`, movimiento `CANCELACION_VENTA`/`DEVOLUCION_VENTA` y comprobante imprimible. |
 
 ## Lo que NO existe (por diseño)
@@ -44,6 +46,7 @@ Sistema web de **inventario y ventas** para equipos/desechos tecnológicos. Cont
 - cierre de caja
 - impresión directa ESC/POS (la impresión es vía navegador `window.print()`)
 - borrado operacional de Items (el flujo es `BAJA`, no eliminar)
+- borrado operacional de Clientes (el ciclo de vida es ACTIVO/INACTIVO, no eliminar)
 
 ---
 
@@ -61,15 +64,15 @@ Sistema web de **inventario y ventas** para equipos/desechos tecnológicos. Cont
 
 ## Roles y permisos
 
-**Canon (23 permisos):**
-`dashboard.ver` · `items.ver` · `items.crear` · `items.editar` · `items.cambiar_estado` · `items.mover` · `reportes.ver` · `categorias.ver|crear|editar|eliminar` · `ubicaciones.ver|crear|editar|eliminar` · `usuarios.ver|crear|editar|eliminar` · `ventas.ver` · `ventas.crear` · `ventas.cancelar` · `ventas.devolver`
+**Canon (29 permisos):**
+`dashboard.ver` · `items.ver` · `items.crear` · `items.editar` · `items.cambiar_estado` · `items.mover` · `reportes.ver` · `categorias.ver|crear|editar|eliminar` · `ubicaciones.ver|crear|editar|eliminar` · `usuarios.ver|crear|editar|eliminar` · `ventas.ver` · `ventas.crear` · `ventas.cancelar` · `ventas.devolver` · `clientes.ver|crear|editar|desactivar` · `configuracion.ver|editar`
 
 | Rol | Permisos |
 |---|---|
-| **Admin** | Los 23. |
-| **Almacen** | Dashboard, items (ver/crear/editar/cambiar_estado/mover), reportes, categorías y ubicaciones (sin eliminar). Sin ventas ni usuarios. |
-| **Auditor** | Solo lectura + reportes + histórico de ventas (incluye consulta de documentos postventa). Sin escritura, sin POS. |
-| **Ventas** | `dashboard.ver`, `items.ver`, `ventas.ver`, `ventas.crear`, `ventas.devolver` (puede registrar devoluciones; NO cancela: la cancelación es reversa financiera total reservada a Admin). |
+| **Admin** | Los 29. |
+| **Almacen** | Dashboard, items (ver/crear/editar/cambiar_estado/mover), reportes, categorías y ubicaciones (sin eliminar). Sin ventas, clientes ni configuración. |
+| **Auditor** | Solo lectura + reportes + histórico de ventas (incluye consulta de documentos postventa) + `clientes.ver` + `configuracion.ver`. Sin escritura, sin POS. |
+| **Ventas** | `dashboard.ver`, `items.ver`, `ventas.ver`, `ventas.crear`, `ventas.devolver` (puede registrar devoluciones; NO cancela: la cancelación es reversa financiera total reservada a Admin) + `clientes.ver/crear/editar` para gestionar clientes en el POS (sin `clientes.desactivar`). |
 | **Operador / Consulta** | Legacy, 0 permisos. |
 
 ---
@@ -99,9 +102,9 @@ php artisan serve  # o tu servidor web
 
 ```bash
 cp .env.testing.example .env.testing   # DB de pruebas aislada
-php artisan test                       # suite completa (260 tests / 914 assertions / 0 failures)
+php artisan test                       # suite completa (304 tests / 1054 assertions / 0 failures)
 php artisan migrate:fresh --seed --env=testing   # instala limpia de pruebas
-php artisan migrate:status --env=testing        # 26 Ran / 0 Pending
+php artisan migrate:status --env=testing        # 29 Ran / 0 Pending
 ```
 
 La suite cubre matriz de roles, atomicidad del POS, dinero exacto en centavos, ticket con precios históricos, FK/UNIQUE de PostgreSQL, integridad de trazabilidad (actor y ubicaciones históricas), permisos granulares de Items y el flujo postventa (cancelación/devolución atómicas, folios `DEV-XXXXXX`, exclusión mutua, rollback, constraints BD y comodato de estados).

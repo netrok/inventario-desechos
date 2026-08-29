@@ -34,6 +34,8 @@ dataset('matriz_rol_permisos', [
         'categorias.ver',
         'ubicaciones.ver',
         'ventas.ver',
+        'clientes.ver',
+        'configuracion.ver',
     ]],
     'Ventas' => ['Ventas', [
         'dashboard.ver',
@@ -41,6 +43,9 @@ dataset('matriz_rol_permisos', [
         'ventas.ver',
         'ventas.crear',
         'ventas.devolver',
+        'clientes.ver',
+        'clientes.crear',
+        'clientes.editar',
     ]],
 ]);
 

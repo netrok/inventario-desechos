@@ -118,7 +118,85 @@
                 </div>
 
                 {{-- Panel confirmación --}}
-                <div class="lg:col-span-2">
+                <div class="lg:col-span-2 space-y-5">
+                    {{-- Panel cliente --}}
+                    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <div class="border-b border-gray-100 px-5 py-4">
+                            <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
+                            <p class="mt-0.5 text-xs text-gray-500">Requerido para registrar la venta.</p>
+                        </div>
+
+                        <div class="px-5 py-4 space-y-3">
+                            @if($cliente)
+                                <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-semibold text-gray-900">{{ $cliente->nombre }}</div>
+                                            <div class="text-xs text-gray-500">{{ $cliente->codigo }} · {{ $cliente->tipo }}</div>
+                                            @if($cliente->rfc) <div class="text-xs text-gray-400">RFC {{ $cliente->rfc }}</div> @endif
+                                        </div>
+                                        @if($cliente)
+                                            <form method="POST" action="{{ route('pos.cliente.limpiar') }}">
+                                                @csrf
+                                                <button type="submit"
+                                                        class="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                                                    Cambiar
+                                                </button>
+                                            </form>
+                                        @endif
+                                    </div>
+                                </div>
+                            @else
+                                <form method="GET" action="{{ route('clientes.search') }}" data-buscar-cliente class="space-y-2">
+                                    <input
+                                        type="text"
+                                        data-input-cliente
+                                        placeholder="Buscar por nombre, código o RFC…"
+                                        autocomplete="off"
+                                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900"
+                                    >
+                                    <div data-resultados-cliente class="max-h-40 overflow-auto space-y-1"></div>
+                                    <input type="hidden" name="cliente_id" data-seleccion-cliente disabled>
+                                </form>
+
+                                <button type="button" data-nuevo-cliente
+                                        class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50">
+                                    + Nuevo cliente al vuelo
+                                </button>
+
+                                <form method="POST" action="{{ route('clientes.rapida') }}" data-rapida-cliente hidden class="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                    @csrf
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <select name="tipo" class="rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900">
+                                            @foreach(\App\Models\Cliente::TIPOS as $tipo)
+                                                <option value="{{ $tipo }}">{{ $tipo }}</option>
+                                            @endforeach
+                                        </select>
+                                        <input type="text" name="nombre" placeholder="Nombre *" required
+                                               class="rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="text" name="rfc" placeholder="RFC (opcional)" maxlength="20"
+                                               class="rounded-lg border-gray-300 text-xs uppercase focus:border-gray-900 focus:ring-gray-900">
+                                        <input type="text" name="telefono" placeholder="Teléfono (opcional)" maxlength="30"
+                                               class="rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900">
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button type="submit"
+                                                class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black">
+                                            Crear y seleccionar
+                                        </button>
+                                        <button type="button" data-cancelar-rapida
+                                                class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+
+                    @if($cliente)
                     <div class="rounded-2xl border border-gray-200 bg-white shadow-sm sticky top-20">
                         <div class="border-b border-gray-100 px-5 py-4">
                             <h3 class="text-sm font-semibold text-gray-900">Confirmar venta</h3>
@@ -175,8 +253,72 @@
                             @endcan
                         </div>
                     </div>
+                    @endif
                 </div>
             </div>
         </div>
     </div>
+
+    @push('scripts')
+    <script>
+    (() => {
+        const input = document.querySelector('[data-input-cliente]');
+        const resultados = document.querySelector('[data-resultados-cliente]');
+        const seleccion = document.querySelector('[data-seleccion-cliente]');
+        if (!input) return;
+
+        let timeout;
+        const url = @json(route('clientes.search'));
+
+        async function buscar(q) {
+            const res = await fetch(url + '?q=' + encodeURIComponent(q));
+            const data = await res.json();
+            resultados.innerHTML = '';
+            seleccion.disabled = true;
+            seleccion.value = '';
+
+            if (!data.clientes?.length) {
+                resultados.innerHTML = '<div class="text-xs text-gray-500 py-1">Sin coincidencias</div>';
+                return;
+            }
+
+            const form = input.closest('form');
+            for (const c of data.clientes) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-gray-100';
+                btn.innerHTML = '<span class="font-semibold text-gray-900">' + c.nombre + '</span>' +
+                    ' <span class="text-xs text-gray-500">' + c.codigo + (c.rfc ? ' · ' + c.rfc : '') + '</span>';
+                btn.addEventListener('click', () => {
+                    seleccion.value = c.id;
+                    seleccion.disabled = false;
+                    form.submit();
+                });
+                resultados.appendChild(btn);
+            }
+        }
+
+        input.addEventListener('input', () => {
+            clearTimeout(timeout);
+            const q = input.value.trim();
+            if (q.length < 2) { resultados.innerHTML = ''; return; }
+            timeout = setTimeout(() => buscar(q), 250);
+        });
+
+        document.addEventListener('click', (e) => {
+            const rapida = document.querySelector('[data-rapida-cliente]');
+            if (!rapida || !e.target.closest('[data-nuevo-cliente]')) return;
+            rapida.hidden = !rapida.hidden;
+            if (!rapida.hidden) {
+                rapida.querySelector('[name="nombre"]').focus();
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('[data-cancelar-rapida]')) return;
+            const rapida = document.querySelector('[data-rapida-cliente]');
+            if (rapida) rapida.hidden = true;
+        });
+    })();
+    </script>
+    @endpush
 </x-app-layout>

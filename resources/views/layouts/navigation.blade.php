@@ -6,9 +6,9 @@
             {{-- Left --}}
             <div class="flex items-center gap-6">
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-2">
-                    <x-application-logo class="h-8 w-auto fill-current text-gray-900" />
+                    <x-application-logo class="h-8 w-auto text-teal-800" />
                     <span class="hidden sm:inline text-sm font-semibold text-gray-900">
-                        Inventario Desechos
+                        Inventario ReUse
                     </span>
                 </a>
 
@@ -49,6 +49,13 @@
                         </a>
                     @endcan
 
+                    @can('clientes.ver')
+                        <a href="{{ route('clientes.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('clientes.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Clientes
+                        </a>
+                    @endcan
+
                     @can('reportes.ver')
                         <a href="{{ route('reports.index') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('reports.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
@@ -74,6 +81,13 @@
                         <a href="{{ route('admin.users.index') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Admin / Usuarios
+                        </a>
+                    @endcan
+
+                    @can('configuracion.ver')
+                        <a href="{{ route('configuracion.edit') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('configuracion.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Configuración
                         </a>
                     @endcan
                 </div>
@@ -118,6 +132,8 @@
                         $showNew = true; $newUrl = route('categorias.create'); $newLabel = '+ Nueva';
                     } elseif (request()->routeIs('ubicaciones.*') && auth()->user()->can('ubicaciones.crear')) {
                         $showNew = true; $newUrl = route('ubicaciones.create'); $newLabel = '+ Nueva';
+                    } elseif (request()->routeIs('clientes.*') && auth()->user()->can('clientes.crear')) {
+                        $showNew = true; $newUrl = route('clientes.create'); $newLabel = '+ Nuevo';
                     }
                 @endphp
 
@@ -182,6 +198,13 @@
                 </a>
             @endcan
 
+            @can('clientes.ver')
+                <a href="{{ route('clientes.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('clientes.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Clientes
+                </a>
+            @endcan
+
             @can('reportes.ver')
                 <a href="{{ route('reports.index') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('reports.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
@@ -210,6 +233,13 @@
                 </a>
             @endcan
 
+            @can('configuracion.ver')
+                <a href="{{ route('configuracion.edit') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('configuracion.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Configuración
+                </a>
+            @endcan
+
             {{-- Botón contextual (móvil, con permisos) --}}
             @php
                 $mobileNewUrl = null;
@@ -221,6 +251,8 @@
                     $mobileNewUrl = route('categorias.create'); $mobileNewLabel = '+ Nueva';
                 } elseif (request()->routeIs('ubicaciones.*') && auth()->user()->can('ubicaciones.crear')) {
                     $mobileNewUrl = route('ubicaciones.create'); $mobileNewLabel = '+ Nueva';
+                } elseif (request()->routeIs('clientes.*') && auth()->user()->can('clientes.crear')) {
+                    $mobileNewUrl = route('clientes.create'); $mobileNewLabel = '+ Nuevo';
                 }
             @endphp
 

@@ -109,6 +109,17 @@
                     Total {{ number_format((float) $documento->venta->total, 2) }} ·
                     <x-estado-badge :estado="$documento->venta->estado" />
                 </div>
+                @if($documento->venta->cliente_historico)
+                    @php $ch = $documento->venta->cliente_historico; @endphp
+                    <div class="mt-2 border-t border-gray-100 pt-2 text-sm text-gray-700">
+                        <span class="text-xs text-gray-500">Cliente: </span>{{ $ch['nombre'] }}
+                        <span class="text-xs text-gray-400">({{ $ch['codigo'] }})</span>
+                    </div>
+                @else
+                    <div class="mt-2 border-t border-gray-100 pt-2 text-sm text-gray-400">
+                        Cliente no registrado (venta histórica)
+                    </div>
+                @endif
             </div>
         </div>
     </div>

@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\PosController;
@@ -80,6 +82,63 @@ Route::middleware(['auth'])->group(function () {
 
     /**
      * =========================
+     * Clientes
+     * =========================
+     */
+    // Autocomplete server-side para el POS (consulta).
+    Route::get('clientes/search', [ClienteController::class, 'search'])
+        ->name('clientes.search')
+        ->middleware('permission:clientes.ver');
+
+    // Alta rápida de cliente desde el POS (no pierde el carrito).
+    Route::post('clientes/rapida', [ClienteController::class, 'rapida'])
+        ->name('clientes.rapida')
+        ->middleware('permission:clientes.crear');
+
+    Route::get('clientes', [ClienteController::class, 'index'])
+        ->name('clientes.index')
+        ->middleware('permission:clientes.ver');
+
+    Route::get('clientes/create', [ClienteController::class, 'create'])
+        ->name('clientes.create')
+        ->middleware('permission:clientes.crear');
+
+    Route::post('clientes', [ClienteController::class, 'store'])
+        ->name('clientes.store')
+        ->middleware('permission:clientes.crear');
+
+    Route::get('clientes/{cliente}', [ClienteController::class, 'show'])
+        ->name('clientes.show')
+        ->middleware('permission:clientes.ver');
+
+    Route::get('clientes/{cliente}/edit', [ClienteController::class, 'edit'])
+        ->name('clientes.edit')
+        ->middleware('permission:clientes.editar');
+
+    Route::put('clientes/{cliente}', [ClienteController::class, 'update'])
+        ->name('clientes.update')
+        ->middleware('permission:clientes.editar');
+
+    // Desactivar/reactivar (protegido por clientes.desactivar).
+    Route::post('clientes/{cliente}/toggle', [ClienteController::class, 'toggleActivo'])
+        ->name('clientes.toggle')
+        ->middleware('permission:clientes.desactivar');
+
+    /**
+     * =========================
+     * Configuración general (solo Admin)
+     * =========================
+     */
+    Route::get('configuracion', [ConfiguracionController::class, 'edit'])
+        ->name('configuracion.edit')
+        ->middleware('permission:configuracion.ver');
+
+    Route::put('configuracion', [ConfiguracionController::class, 'update'])
+        ->name('configuracion.update')
+        ->middleware('permission:configuracion.editar');
+
+    /**
+     * =========================
      * Items
      * =========================
      */
@@ -128,6 +187,15 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('pos/quitar', [PosController::class, 'remove'])
         ->name('pos.remove')
+        ->middleware('permission:ventas.crear');
+
+    // Seleccionar/limpiar cliente del POS (ventas.crear; clientes.ver para elegir)
+    Route::post('pos/cliente', [PosController::class, 'setCliente'])
+        ->name('pos.cliente')
+        ->middleware(['permission:ventas.crear', 'permission:clientes.ver']);
+
+    Route::post('pos/cliente/limpiar', [PosController::class, 'clearCliente'])
+        ->name('pos.cliente.limpiar')
         ->middleware('permission:ventas.crear');
 
     // Confirmación de venta (atómica)
