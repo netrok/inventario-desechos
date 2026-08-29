@@ -24,4 +24,14 @@ class Ubicacion extends Model
     {
         return $this->hasMany(\App\Models\Item::class, 'ubicacion_id');
     }
+
+    public function movimientosOrigen(): HasMany
+    {
+        return $this->hasMany(\App\Models\Movimiento::class, 'de_ubicacion_id');
+    }
+
+    public function movimientosDestino(): HasMany
+    {
+        return $this->hasMany(\App\Models\Movimiento::class, 'a_ubicacion_id');
+    }
 }

@@ -33,40 +33,47 @@ class Item extends Model
         'estado',
         'ubicacion_id',
         'notas',
+        'precio',
         'foto_path',
     ];
 
     protected $casts = [
-        'codigo_seq'   => 'integer',
+        'codigo_seq' => 'integer',
         'categoria_id' => 'integer',
         'ubicacion_id' => 'integer',
+        'precio' => 'decimal:2',
     ];
 
     protected static function booted(): void
     {
         static::creating(function (Item $item) {
-            if (!empty($item->codigo) && !empty($item->codigo_seq)) {
+            if (! empty($item->codigo) && ! empty($item->codigo_seq)) {
                 return;
             }
 
-            $next = DB::transaction(function () {
-                DB::statement('LOCK TABLE items IN EXCLUSIVE MODE');
-                return (int) (DB::table('items')->max('codigo_seq') ?? 0) + 1;
-            });
+            $seq = DB::selectOne('SELECT nextval(\'items_codigo_seq_generator\') AS seq');
+            $next = (int) $seq->seq;
 
             $item->codigo_seq = $item->codigo_seq ?: $next;
-            $item->codigo = $item->codigo ?: ('ITM-' . str_pad((string) $item->codigo_seq, 6, '0', STR_PAD_LEFT));
+            $item->codigo = $item->codigo ?: ('ITM-'.str_pad((string) $item->codigo_seq, 6, '0', STR_PAD_LEFT));
         });
     }
 
+    /**
+     * Transiciones manuales (cambio de estado por endpoint / formulario).
+     *
+     * VENDIDO NO aparece aquí: no existe transición manual hacia VENDIDO.
+     * El único productor operativo de VENDIDO es el checkout del POS
+     * (PosController::checkout), que lo aplica dentro de su flujo atómico.
+     */
     public static function canTransition(string $from, string $to): bool
     {
         $map = [
-            'DISPONIBLE' => ['RESERVADO', 'REPARACION', 'BAJA', 'VENDIDO'],
-            'RESERVADO'  => ['DISPONIBLE', 'VENDIDO', 'BAJA'],
+            'DISPONIBLE' => ['RESERVADO', 'REPARACION', 'BAJA'],
+            'RESERVADO' => ['DISPONIBLE', 'BAJA'],
             'REPARACION' => ['DISPONIBLE', 'BAJA'],
-            'VENDIDO'    => [],
-            'BAJA'       => [],
+            'VENDIDO' => [],
+            'BAJA' => [],
         ];
 
         return in_array($to, $map[$from] ?? [], true);

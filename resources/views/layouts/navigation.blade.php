@@ -23,23 +23,36 @@
 
                     @can('items.ver')
                         <a href="{{ route('items.index') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.*') && !request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.index', 'items.show', 'items.create', 'items.edit') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Items
                         </a>
                     @endcan
 
-                    {{-- Papelera: debe coincidir con el permiso que protege la ruta (items.eliminar) --}}
-                    @can('items.eliminar')
-                        <a href="{{ route('items.trash') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                            <span class="inline-flex items-center gap-2">
-                                Papelera
-                                @if(($itemsTrashCount ?? 0) > 0)
-                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-semibold rounded-full border bg-rose-100 text-rose-700 border-rose-200">
-                                        {{ $itemsTrashCount }}
-                                    </span>
-                                @endif
-                            </span>
+                    @can('items.ver')
+                        <a href="{{ route('items.scan') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('items.scan') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Escanear
+                        </a>
+                    @endcan
+
+                    @can('ventas.crear')
+                        <a href="{{ route('pos.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('pos.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Punto de venta
+                        </a>
+                    @endcan
+
+                    @can('ventas.ver')
+                        <a href="{{ route('ventas.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('ventas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Ventas
+                        </a>
+                    @endcan
+
+                    @can('reportes.ver')
+                        <a href="{{ route('reports.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('reports.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Reportes
                         </a>
                     @endcan
 
@@ -57,7 +70,7 @@
                         </a>
                     @endcan
 
-                    @can('usuarios.gestionar')
+                    @can('usuarios.ver')
                         <a href="{{ route('admin.users.index') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Admin / Usuarios
@@ -99,7 +112,7 @@
                     $newUrl = null;
                     $newLabel = '';
 
-                    if (request()->routeIs('items.*') && !request()->routeIs('items.trash') && auth()->user()->can('items.crear')) {
+                    if (request()->routeIs('items.*') && auth()->user()->can('items.crear')) {
                         $showNew = true; $newUrl = route('items.create'); $newLabel = '+ Nuevo';
                     } elseif (request()->routeIs('categorias.*') && auth()->user()->can('categorias.crear')) {
                         $showNew = true; $newUrl = route('categorias.create'); $newLabel = '+ Nueva';
@@ -143,16 +156,36 @@
 
             @can('items.ver')
                 <a href="{{ route('items.index') }}"
-                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.*') && !request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.index', 'items.show', 'items.create', 'items.edit') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Items
                 </a>
             @endcan
 
-            {{-- Papelera móvil: debe coincidir con el permiso que protege la ruta (items.eliminar) --}}
-            @can('items.eliminar')
-                <a href="{{ route('items.trash') }}"
-                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.trash') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                    Papelera @if(($itemsTrashCount ?? 0) > 0) ({{ $itemsTrashCount }}) @endif
+            @can('items.ver')
+                <a href="{{ route('items.scan') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('items.scan') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Escanear
+                </a>
+            @endcan
+
+            @can('ventas.crear')
+                <a href="{{ route('pos.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('pos.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Punto de venta
+                </a>
+            @endcan
+
+            @can('ventas.ver')
+                <a href="{{ route('ventas.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('ventas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Ventas
+                </a>
+            @endcan
+
+            @can('reportes.ver')
+                <a href="{{ route('reports.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('reports.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Reportes
                 </a>
             @endcan
 
@@ -170,7 +203,7 @@
                 </a>
             @endcan
 
-            @can('usuarios.gestionar')
+            @can('usuarios.ver')
                 <a href="{{ route('admin.users.index') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Admin / Usuarios
@@ -182,7 +215,7 @@
                 $mobileNewUrl = null;
                 $mobileNewLabel = null;
 
-                if (request()->routeIs('items.*') && !request()->routeIs('items.trash') && auth()->user()->can('items.crear')) {
+                if (request()->routeIs('items.*') && auth()->user()->can('items.crear')) {
                     $mobileNewUrl = route('items.create'); $mobileNewLabel = '+ Nuevo';
                 } elseif (request()->routeIs('categorias.*') && auth()->user()->can('categorias.crear')) {
                     $mobileNewUrl = route('categorias.create'); $mobileNewLabel = '+ Nueva';

@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Cabeceras de seguridad mínimas (globales, todas las respuestas).
+        // CSP se deja al web server (Nginx/Apache) para no romper inline/Vite.
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
         // Alias de middlewares (Spatie Permission)
         $middleware->alias([
             'role' => RoleMiddleware::class,

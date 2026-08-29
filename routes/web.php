@@ -1,37 +1,81 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
-use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\PosController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UbicacionController;
+use App\Http\Controllers\VentaController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('dashboard'));
 
 Route::middleware(['auth'])->group(function () {
 
     // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard')
+        ->middleware('permission:dashboard.ver');
 
     // Perfil
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    // Sin DELETE /profile: las cuentas se administran vía usuarios.eliminar.
 
     /**
      * =========================
      * Catálogos
      * =========================
      */
-    Route::middleware('permission:categorias.ver')->group(function () {
-        Route::resource('categorias', CategoriaController::class)->except(['show']);
-    });
+    Route::get('categorias', [CategoriaController::class, 'index'])
+        ->name('categorias.index')
+        ->middleware('permission:categorias.ver');
 
-    Route::middleware('permission:ubicaciones.ver')->group(function () {
-        Route::resource('ubicaciones', UbicacionController::class)->except(['show']);
-    });
+    Route::get('categorias/create', [CategoriaController::class, 'create'])
+        ->name('categorias.create')
+        ->middleware('permission:categorias.crear');
+
+    Route::post('categorias', [CategoriaController::class, 'store'])
+        ->name('categorias.store')
+        ->middleware('permission:categorias.crear');
+
+    Route::get('categorias/{categoria}/edit', [CategoriaController::class, 'edit'])
+        ->name('categorias.edit')
+        ->middleware('permission:categorias.editar');
+
+    Route::put('categorias/{categoria}', [CategoriaController::class, 'update'])
+        ->name('categorias.update')
+        ->middleware('permission:categorias.editar');
+
+    Route::delete('categorias/{categoria}', [CategoriaController::class, 'destroy'])
+        ->name('categorias.destroy')
+        ->middleware('permission:categorias.eliminar');
+
+    Route::get('ubicaciones', [UbicacionController::class, 'index'])
+        ->name('ubicaciones.index')
+        ->middleware('permission:ubicaciones.ver');
+
+    Route::get('ubicaciones/create', [UbicacionController::class, 'create'])
+        ->name('ubicaciones.create')
+        ->middleware('permission:ubicaciones.crear');
+
+    Route::post('ubicaciones', [UbicacionController::class, 'store'])
+        ->name('ubicaciones.store')
+        ->middleware('permission:ubicaciones.crear');
+
+    Route::get('ubicaciones/{ubicacion}/edit', [UbicacionController::class, 'edit'])
+        ->name('ubicaciones.edit')
+        ->middleware('permission:ubicaciones.editar');
+
+    Route::put('ubicaciones/{ubicacion}', [UbicacionController::class, 'update'])
+        ->name('ubicaciones.update')
+        ->middleware('permission:ubicaciones.editar');
+
+    Route::delete('ubicaciones/{ubicacion}', [UbicacionController::class, 'destroy'])
+        ->name('ubicaciones.destroy')
+        ->middleware('permission:ubicaciones.eliminar');
 
     /**
      * =========================
@@ -47,37 +91,100 @@ Route::middleware(['auth'])->group(function () {
         ->name('items.export.pdf')
         ->middleware('permission:items.ver');
 
-    // Papelera
-    Route::get('items-trash', [ItemController::class, 'trash'])
-        ->name('items.trash')
-        ->middleware('permission:items.eliminar');
-
-    Route::post('items/{id}/restore', [ItemController::class, 'restore'])
-        ->name('items.restore')
-        ->middleware('permission:items.eliminar');
-
-    Route::delete('items/{id}/force', [ItemController::class, 'forceDelete'])
-        ->name('items.forceDelete')
-        ->middleware('permission:items.eliminar');
-
     // Acciones rápidas (editar)
     Route::post('items/{id}/estado', [ItemController::class, 'changeEstado'])
         ->name('items.changeEstado')
-        ->middleware('permission:items.editar');
+        ->middleware('permission:items.cambiar_estado');
 
     Route::post('items/{id}/mover', [ItemController::class, 'moveUbicacion'])
         ->name('items.moveUbicacion')
-        ->middleware('permission:items.editar');
+        ->middleware('permission:items.mover');
 
     // CRUD principal
     Route::get('items', [ItemController::class, 'index'])->name('items.index')->middleware('permission:items.ver');
+    Route::get('items/scan', [ItemController::class, 'scan'])->name('items.scan')->middleware('permission:items.ver');
     Route::get('items/create', [ItemController::class, 'create'])->name('items.create')->middleware('permission:items.crear');
     Route::post('items', [ItemController::class, 'store'])->name('items.store')->middleware('permission:items.crear');
     Route::get('items/{item}', [ItemController::class, 'show'])->name('items.show')->middleware('permission:items.ver');
+    Route::get('items/{item}/label', [ItemController::class, 'label'])->name('items.label')->middleware('permission:items.ver');
     Route::get('items/{item}/edit', [ItemController::class, 'edit'])->name('items.edit')->middleware('permission:items.editar');
     Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update')->middleware('permission:items.editar');
-    Route::delete('items/{item}', [ItemController::class, 'destroy'])->name('items.destroy')->middleware('permission:items.eliminar');
+
+    /**
+     * =========================
+     * Punto de venta (POS operativo: ventas.crear)
+     * =========================
+     */
+    // POS / ventas
+    Route::get('pos', [PosController::class, 'index'])
+        ->name('pos.index')
+        ->middleware('permission:ventas.crear');
+
+    // Acciones sobre el carrito (solo ventas.crear; Auditor es solo lectura)
+    Route::post('pos/agregar', [PosController::class, 'add'])
+        ->name('pos.add')
+        ->middleware('permission:ventas.crear');
+
+    Route::post('pos/quitar', [PosController::class, 'remove'])
+        ->name('pos.remove')
+        ->middleware('permission:ventas.crear');
+
+    // Confirmación de venta (atómica)
+    Route::post('pos/checkout', [PosController::class, 'checkout'])
+        ->name('pos.checkout')
+        ->middleware('permission:ventas.crear');
+
+    /**
+     * =========================
+     * Consulta histórica de ventas (ventas.ver)
+     * =========================
+     */
+    Route::get('ventas', [VentaController::class, 'index'])
+        ->name('ventas.index')
+        ->middleware('permission:ventas.ver');
+
+    Route::get('ventas/{venta}', [VentaController::class, 'show'])
+        ->name('ventas.show')
+        ->middleware('permission:ventas.ver');
+
+    // Ticket imprimible (consultas: imprimir/reimprimir es lectura).
+    Route::get('ventas/{venta}/ticket', [VentaController::class, 'ticket'])
+        ->name('ventas.ticket')
+        ->middleware('permission:ventas.ver');
+
+    /**
+     * =========================
+     * Reportes operativos
+     * =========================
+     */
+    Route::get('reports', [ReportController::class, 'index'])
+        ->name('reports.index')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory', [ReportController::class, 'inventory'])
+        ->name('reports.inventory')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory.xlsx', [ReportController::class, 'inventoryXlsx'])
+        ->name('reports.inventory.xlsx')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory.pdf', [ReportController::class, 'inventoryPdf'])
+        ->name('reports.inventory.pdf')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/movimientos', [ReportController::class, 'movimientos'])
+        ->name('reports.movimientos')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/movimientos.xlsx', [ReportController::class, 'movimientosXlsx'])
+        ->name('reports.movimientos.xlsx')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/movimientos.pdf', [ReportController::class, 'movimientosPdf'])
+        ->name('reports.movimientos.pdf')
+        ->middleware('permission:reportes.ver');
 });
 
-require __DIR__ . '/auth.php';
-require __DIR__ . '/admin.php';
+require __DIR__.'/auth.php';
+require __DIR__.'/admin.php';

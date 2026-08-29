@@ -55,19 +55,20 @@
                         ← Volver
                     </a>
 
-                    <a href="{{ route('items.edit', $item) }}"
-                       class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
-                        Editar
-                    </a>
+                    @can('items.ver')
+                        <a href="{{ route('items.label', $item) }}"
+                           target="_blank"
+                           class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50">
+                            Imprimir etiqueta
+                        </a>
+                    @endcan
 
-                    <form method="POST" action="{{ route('items.destroy', $item) }}"
-                          onsubmit="return confirm('¿Enviar este item a la papelera?');">
-                        @csrf
-                        @method('DELETE')
-                        <button class="inline-flex items-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100">
-                            Eliminar
-                        </button>
-                    </form>
+                    @can('items.editar')
+                        <a href="{{ route('items.edit', $item) }}"
+                           class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
+                            Editar
+                        </a>
+                    @endcan
                 </div>
             </div>
 
@@ -262,70 +263,67 @@
 
                         <div class="p-6 space-y-4">
                             {{-- Cambiar estado --}}
-                            <form method="POST"
-                                  action="{{ route('items.changeEstado', $item->id) }}"
-                                  enctype="multipart/form-data"
-                                  class="space-y-2">
-                                @csrf
+                            @can('items.cambiar_estado')
+                                <form method="POST"
+                                      action="{{ route('items.changeEstado', $item->id) }}"
+                                      enctype="multipart/form-data"
+                                      class="space-y-2">
+                                    @csrf
 
-                                <label class="block text-xs font-medium text-gray-600">Cambiar estado</label>
-                                <select name="estado" class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
-                                    @foreach(\App\Models\Item::ESTADOS as $e)
-                                        <option value="{{ $e }}" @selected($item->estado === $e)>{{ $e }}</option>
-                                    @endforeach
-                                </select>
+                                    <label class="block text-xs font-medium text-gray-600">Cambiar estado</label>
+                                    <select name="estado" class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
+                                        @foreach(array_diff(\App\Models\Item::ESTADOS, ['VENDIDO']) as $e)
+                                            <option value="{{ $e }}" @selected($item->estado === $e)>{{ $e }}</option>
+                                        @endforeach
+                                    </select>
+                                    <p class="text-xs text-gray-500">
+                                        BAJA retira el equipo de operación; el registro se conserva para trazabilidad.
+                                        VENDIDO solo se origina desde el POS.
+                                    </p>
 
-                                <input name="notas" placeholder="Notas (opcional)"
-                                       class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
+                                    <input name="notas" placeholder="Notas (opcional)"
+                                           class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
 
-                                <input type="file" name="evidencia" class="w-full text-sm text-gray-700"
-                                       accept="image/*,.pdf">
+                                    <input type="file" name="evidencia" class="w-full text-sm text-gray-700"
+                                           accept="image/*,.pdf">
 
-                                <button class="w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black">
-                                    Guardar estado
-                                </button>
-                            </form>
+                                    <button class="w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black">
+                                        Guardar estado
+                                    </button>
+                                </form>
+                            @endcan
 
                             <div class="h-px bg-gray-100"></div>
 
                             {{-- Mover ubicación --}}
-                            <form method="POST"
-                                  action="{{ route('items.moveUbicacion', $item->id) }}"
-                                  enctype="multipart/form-data"
-                                  class="space-y-2">
-                                @csrf
+                            @can('items.mover')
+                                <form method="POST"
+                                      action="{{ route('items.moveUbicacion', $item->id) }}"
+                                      enctype="multipart/form-data"
+                                      class="space-y-2">
+                                    @csrf
 
-                                <label class="block text-xs font-medium text-gray-600">Mover ubicación</label>
-                                <select name="ubicacion_id" class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
-                                    <option value="">— Sin ubicación —</option>
-                                    @foreach($ubicaciones as $u)
-                                        <option value="{{ $u->id }}" @selected((string)$item->ubicacion_id === (string)$u->id)>
-                                            {{ $u->nombre }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                    <label class="block text-xs font-medium text-gray-600">Mover ubicación</label>
+                                    <select name="ubicacion_id" class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
+                                        <option value="">— Sin ubicación —</option>
+                                        @foreach($ubicaciones as $u)
+                                            <option value="{{ $u->id }}" @selected((string)$item->ubicacion_id === (string)$u->id)>
+                                                {{ $u->nombre }}
+                                            </option>
+                                        @endforeach
+                                    </select>
 
-                                <input name="notas" placeholder="Notas (opcional)"
-                                       class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
+                                    <input name="notas" placeholder="Notas (opcional)"
+                                           class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
 
-                                <input type="file" name="evidencia" class="w-full text-sm text-gray-700"
-                                       accept="image/*,.pdf">
+                                    <input type="file" name="evidencia" class="w-full text-sm text-gray-700"
+                                           accept="image/*,.pdf">
 
-                                <button class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50">
-                                    Mover
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-
-                    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
-                        <div class="px-6 py-4 border-b border-gray-100">
-                            <h2 class="text-sm font-semibold text-gray-900">Atajo</h2>
-                        </div>
-                        <div class="p-6">
-                            <a href="{{ route('items.trash') }}" class="text-sm text-gray-700 hover:text-gray-900 underline">
-                                Ver papelera
-                            </a>
+                                    <button class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50">
+                                        Mover
+                                    </button>
+                                </form>
+                            @endcan
                         </div>
                     </div>
 

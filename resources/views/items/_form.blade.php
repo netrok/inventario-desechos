@@ -1,5 +1,7 @@
 @php
     $isEdit = isset($item) && $item?->exists;
+    $hasQuickValues = ! $isEdit && old('categoria_id') !== null && old('categoria_id') !== '';
+    $autoFocus = $isEdit ? null : ($hasQuickValues ? 'marca' : 'categoria_id');
 @endphp
 
 <div class="space-y-6">
@@ -50,6 +52,7 @@
                     name="marca"
                     value="{{ old('marca', $item->marca ?? '') }}"
                     placeholder="Ej. Dell, HP, Lenovo"
+                    @if(($autoFocus ?? null) === 'marca') autofocus @endif
                     class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('marca') border-rose-300 ring-rose-200 @enderror"
                 >
                 @error('marca') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
@@ -74,6 +77,7 @@
                 @if(isset($categorias) && $categorias?->count())
                     <select
                         name="categoria_id"
+                        @if(($autoFocus ?? null) === 'categoria_id') autofocus @endif
                         class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('categoria_id') border-rose-300 ring-rose-200 @enderror"
                     >
                         <option value="">— Selecciona —</option>
@@ -105,52 +109,119 @@
     {{-- Sección: Control --}}
     <div>
         <h3 class="text-sm font-semibold text-gray-900">Control</h3>
-        <p class="text-xs text-gray-500 mt-1">Estado operativo y ubicación actual.</p>
 
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {{-- Estado --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Estado</label>
-                <select
-                    name="estado"
-                    class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('estado') border-rose-300 ring-rose-200 @enderror"
-                >
-                    @foreach($estados as $e)
-                        <option value="{{ $e }}" @selected(old('estado', $item->estado ?? 'DISPONIBLE') === $e)>{{ $e }}</option>
-                    @endforeach
-                </select>
-                @error('estado') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
-            </div>
+        @if($isEdit)
+            <p class="text-xs text-gray-500 mt-1">
+                El estado y la ubicación se gestionan desde la ficha del equipo (Acciones rápidas).
+            </p>
 
-            {{-- Ubicación --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Ubicación</label>
-                <select
-                    name="ubicacion_id"
-                    class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('ubicacion_id') border-rose-300 ring-rose-200 @enderror"
-                >
-                    <option value="">— Sin ubicación —</option>
-                    @foreach($ubicaciones as $u)
-                        <option value="{{ $u->id }}" @selected((string)old('ubicacion_id', $item->ubicacion_id ?? '') === (string)$u->id)>
-                            {{ $u->nombre }}
-                        </option>
-                    @endforeach
-                </select>
-                @error('ubicacion_id') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
-            </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- Estado (solo lectura en edición) --}}
+                <div>
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                        Estado actual: <span class="font-semibold">{{ $item->estado }}</span>
+                    </div>
+                </div>
 
-            {{-- Notas --}}
-            <div class="md:col-span-2">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Notas</label>
-                <textarea
-                    name="notas"
-                    rows="4"
-                    placeholder="Observaciones, condición física, accesorios incluidos, etc."
-                    class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('notas') border-rose-300 ring-rose-200 @enderror"
-                >{{ old('notas', $item->notas ?? '') }}</textarea>
-                @error('notas') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                {{-- Ubicación (solo lectura en edición) --}}
+                <div>
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                        Ubicación: <span class="font-semibold">{{ $item->ubicacion?->nombre ?? '—' }}</span>
+                    </div>
+                </div>
+
+                {{-- Precio de venta (editable) --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Precio de venta</label>
+                    <input
+                        name="precio"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value="{{ old('precio', $item->precio ?? '') }}"
+                        placeholder="0.00"
+                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('precio') border-rose-300 ring-rose-200 @enderror"
+                    >
+                    @error('precio') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                    <div class="mt-1 text-xs text-gray-500">Requerido para vender el equipo desde el POS.</div>
+                </div>
+
+                {{-- Notas --}}
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Notas</label>
+                    <textarea
+                        name="notas"
+                        rows="4"
+                        placeholder="Observaciones, condición física, accesorios incluidos, etc."
+                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('notas') border-rose-300 ring-rose-200 @enderror"
+                    >{{ old('notas', $item->notas ?? '') }}</textarea>
+                    @error('notas') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                </div>
             </div>
-        </div>
+        @else
+            <p class="text-xs text-gray-500 mt-1">Estado operativo y ubicación actual.</p>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- Estado --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Estado</label>
+                    <select
+                        name="estado"
+                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('estado') border-rose-300 ring-rose-200 @enderror"
+                    >
+                        @foreach(array_diff($estados, ['VENDIDO']) as $e)
+                            <option value="{{ $e }}" @selected(old('estado', $item->estado ?? 'DISPONIBLE') === $e)>{{ $e }}</option>
+                        @endforeach
+                    </select>
+                    @error('estado') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                </div>
+
+                {{-- Precio de venta (editable) --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Precio de venta</label>
+                    <input
+                        name="precio"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value="{{ old('precio', $item->precio ?? '') }}"
+                        placeholder="0.00"
+                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('precio') border-rose-300 ring-rose-200 @enderror"
+                    >
+                    @error('precio') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                    <div class="mt-1 text-xs text-gray-500">Requerido para vender el equipo desde el POS.</div>
+                </div>
+
+                {{-- Ubicación --}}
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Ubicación</label>
+                    <select
+                        name="ubicacion_id"
+                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('ubicacion_id') border-rose-300 ring-rose-200 @enderror"
+                    >
+                        <option value="">— Sin ubicación —</option>
+                        @foreach($ubicaciones as $u)
+                            <option value="{{ $u->id }}" @selected((string)old('ubicacion_id', $item->ubicacion_id ?? '') === (string)$u->id)>
+                                {{ $u->nombre }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('ubicacion_id') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                </div>
+
+                {{-- Notas --}}
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Notas</label>
+                    <textarea
+                        name="notas"
+                        rows="4"
+                        placeholder="Observaciones, condición física, accesorios incluidos, etc."
+                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('notas') border-rose-300 ring-rose-200 @enderror"
+                    >{{ old('notas', $item->notas ?? '') }}</textarea>
+                    @error('notas') <div class="mt-1 text-xs text-rose-600">{{ $message }}</div> @enderror
+                </div>
+            </div>
+        @endif
     </div>
 
     {{-- Sección: Foto --}}

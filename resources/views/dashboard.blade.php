@@ -24,7 +24,6 @@
                         ['Reparación', $kpis->reparacion ?? 0],
                         ['Vendido', $kpis->vendido ?? 0],
                         ['Baja', $kpis->baja ?? 0],
-                        ['Papelera', $trashCount ?? 0],
                     ];
                 @endphp
 

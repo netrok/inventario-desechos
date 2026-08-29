@@ -12,13 +12,6 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function __construct()
-    {
-        // Si tu ruta ya está protegida con role:Admin en routes/admin.php, esto es extra-seguro.
-        // Recomendado: permiso específico para gestionar usuarios.
-        $this->middleware('permission:usuarios.gestionar');
-    }
-
     public function index(Request $request)
     {
         $q = trim((string) $request->query('q', ''));
@@ -27,7 +20,7 @@ class UserController extends Controller
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($qq) use ($q) {
                     $qq->where('name', 'ilike', "%{$q}%")
-                       ->orWhere('email', 'ilike', "%{$q}%");
+                        ->orWhere('email', 'ilike', "%{$q}%");
                 });
             })
             ->with('roles')
@@ -77,17 +70,27 @@ class UserController extends Controller
     {
         $data = $request->validated();
 
+        // El último Admin nunca puede perder el rol Admin (ni por democión).
+        $rolesSent = $data['roles'] ?? [];
+        if ($user->hasRole('Admin')
+            && ! in_array('Admin', $rolesSent, true)
+            && User::role('Admin')->count() <= 1) {
+            return back()
+                ->with('error', 'No puedes quitar el rol Admin al último administrador.')
+                ->withInput();
+        }
+
         $user->fill([
             'name' => $data['name'],
             'email' => $data['email'],
         ]);
 
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $user->password = Hash::make($data['password']);
         }
 
         $user->save();
-        $user->syncRoles($data['roles'] ?? []);
+        $user->syncRoles($rolesSent);
 
         return redirect()
             ->route('admin.users.index')
@@ -107,6 +110,16 @@ class UserController extends Controller
             if ($adminsCount <= 1) {
                 return back()->with('error', 'No puedes eliminar al último Admin.');
             }
+        }
+
+        // No borrar un usuario con ventas: perdería el actor histórico.
+        if ($user->ventas()->exists()) {
+            return back()->with('error', 'No se puede eliminar este usuario porque tiene ventas registradas.');
+        }
+
+        // No borrar un usuario con movimientos: perdería el actor histórico.
+        if ($user->movimientos()->exists()) {
+            return back()->with('error', 'No se puede eliminar este usuario porque tiene movimientos registrados.');
         }
 
         $user->delete();
