@@ -19,6 +19,10 @@ class Movimiento extends Model
 
     public const TIPO_VENTA = 'VENTA';
 
+    public const TIPO_CANCELACION_VENTA = 'CANCELACION_VENTA';
+
+    public const TIPO_DEVOLUCION_VENTA = 'DEVOLUCION_VENTA';
+
     public const TIPO_RESTAURAR = 'RESTAURAR';
 
     protected $fillable = [

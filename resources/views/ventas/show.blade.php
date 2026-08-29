@@ -8,6 +8,10 @@
                 </p>
             </div>
 
+            <div class="flex items-center gap-2">
+                <x-estado-badge :estado="$venta->estado" />
+            </div>
+
             <div class="flex flex-wrap items-center gap-2">
                 <a href="{{ route('ventas.ticket', ['venta' => $venta, 'width' => 80]) }}"
                    target="_blank"
@@ -19,6 +23,22 @@
                    class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
                     Ticket 58 mm
                 </a>
+                @can('ventas.devolver')
+                    @if($venta->esElegibleParaDevolucion())
+                        <a href="{{ route('ventas.devolver', $venta) }}"
+                           class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100">
+                            Devolver equipos
+                        </a>
+                    @endif
+                @endcan
+                @can('ventas.cancelar')
+                    @if($venta->esElegibleParaCancelacion())
+                        <a href="{{ route('ventas.cancelar', $venta) }}"
+                           class="inline-flex items-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800 hover:bg-rose-100">
+                            Cancelar venta
+                        </a>
+                    @endif
+                @endcan
                 <a href="{{ route('ventas.index') }}"
                    class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                     ← Volver a ventas
@@ -102,6 +122,39 @@
                 <div class="rounded-2xl border border-gray-200 bg-white p-4">
                     <div class="text-xs text-gray-500">Notas</div>
                     <p class="mt-1 text-sm text-gray-700">{{ $venta->notas }}</p>
+                </div>
+            @endif
+
+            {{-- Historial postventa --}}
+            @if($venta->documentosPostventa->isNotEmpty())
+                <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                    <div class="border-b border-gray-100 px-5 py-4">
+                        <h3 class="text-sm font-semibold text-gray-900">Historial de postventa</h3>
+                        <p class="mt-1 text-xs text-gray-500">Cancelaciones y devoluciones asociadas a esta venta.</p>
+                    </div>
+
+                    <div class="divide-y divide-gray-100">
+                        @foreach($venta->documentosPostventa as $doc)
+                            <div class="px-5 py-4">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <a href="{{ route('postventa.show', $doc) }}"
+                                       class="font-semibold text-gray-900 hover:underline">{{ $doc->folio }}</a>
+                                    <span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                                        {{ $doc->tipo }}
+                                    </span>
+                                    <span class="text-xs text-gray-400">{{ $doc->created_at->format('d/m/Y H:i') }}</span>
+                                    <span class="text-xs text-gray-400">· {{ $doc->user?->name ?? '—' }}</span>
+                                </div>
+
+                                @foreach($doc->detalles as $detalle)
+                                    <div class="mt-1 flex items-center justify-between text-sm">
+                                        <span class="text-gray-700">{{ $detalle->item?->codigo ?? '—' }}</span>
+                                        <span class="font-semibold text-gray-900">{{ number_format((float) $detalle->importe, 2) }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             @endif
         </div>

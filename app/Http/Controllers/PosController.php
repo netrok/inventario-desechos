@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
+use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -45,7 +46,7 @@ class PosController extends Controller
         }
 
         try {
-            if ($this->precioACentavos($item->precio) < 0) {
+            if (Money::aCentavos($item->precio) < 0) {
                 return "El equipo {$item->codigo} no tiene un precio válido asignado.";
             }
         } catch (\UnexpectedValueException) {
@@ -53,48 +54,6 @@ class PosController extends Controller
         }
 
         return null;
-    }
-
-    /**
-     * Convierte un decimal(12,2) proveniente de la BD a centavos enteros.
-     *
-     * Acepta "0" → 0, "0.00" → 0, "1" → 100, "1.2" → 120, "1.20" → 120,
-     * "19.99" → 1999. Rechaza nulos, vacíos, no numéricos y más de 2 decimales.
-     * No usa punto flotante: aritmética monetaria en enteros.
-     */
-    private function precioACentavos(int|float|string|null $precio): int
-    {
-        if ($precio === null || (string) $precio === '') {
-            throw new \UnexpectedValueException('Precio inválido.');
-        }
-
-        $valor = trim((string) $precio);
-
-        if (! preg_match('/^-?\d+(\.\d{1,2})?$/', $valor)) {
-            throw new \UnexpectedValueException('Precio inválido.');
-        }
-
-        $negativo = str_starts_with($valor, '-');
-        $digitos = $negativo ? substr($valor, 1) : $valor;
-
-        [$enteros, $fraccion] = array_pad(explode('.', $digitos), 2, null);
-        $fraccion = $fraccion === null ? '00' : str_pad($fraccion, 2, '0');
-
-        $centavos = ((int) $enteros) * 100 + (int) $fraccion;
-
-        return $negativo ? -$centavos : $centavos;
-    }
-
-    /**
-     * Convierte centavos enteros a su representación decimal exacta "123.45".
-     * Aritmética entera (división y módulo por 100), sin paso por float.
-     */
-    private function centavosAPrecio(int $centavos): string
-    {
-        $signo = $centavos < 0 ? '-' : '';
-        $absoluto = abs($centavos);
-
-        return $signo.sprintf('%d.%02d', intdiv($absoluto, 100), $absoluto % 100);
     }
 
     /**
@@ -120,7 +79,7 @@ class PosController extends Controller
 
         $totalCentavos = $items->sum(function (Item $item) {
             try {
-                return $this->precioACentavos($item->precio);
+                return Money::aCentavos($item->precio);
             } catch (\UnexpectedValueException) {
                 return 0;
             }
@@ -128,7 +87,7 @@ class PosController extends Controller
 
         return view('pos.index', [
             'items' => $items->values(),
-            'total' => $this->centavosAPrecio($totalCentavos),
+            'total' => Money::aPrecio($totalCentavos),
             'formasPago' => Venta::FORMAS_PAGO,
         ]);
     }
@@ -255,12 +214,12 @@ class PosController extends Controller
                     throw ValidationException::withMessages(['items' => $error]);
                 }
 
-                $totalCentavos += $this->precioACentavos($item->precio);
+                $totalCentavos += Money::aCentavos($item->precio);
             }
 
             $venta = Venta::create([
                 'user_id' => Auth::id(),
-                'total' => $this->centavosAPrecio($totalCentavos),
+                'total' => Money::aPrecio($totalCentavos),
                 'forma_pago' => $data['forma_pago'],
                 'notas' => $data['notas'] ?? null,
             ]);

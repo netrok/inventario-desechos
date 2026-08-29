@@ -11,11 +11,27 @@ class Venta extends Model
 {
     public const FORMAS_PAGO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'OTRO'];
 
+    public const ESTADO_ACTIVA = 'ACTIVA';
+
+    public const ESTADO_PARCIALMENTE_DEVUELTA = 'PARCIALMENTE_DEVUELTA';
+
+    public const ESTADO_DEVUELTA = 'DEVUELTA';
+
+    public const ESTADO_CANCELADA = 'CANCELADA';
+
+    public const ESTADOS = [
+        self::ESTADO_ACTIVA,
+        self::ESTADO_PARCIALMENTE_DEVUELTA,
+        self::ESTADO_DEVUELTA,
+        self::ESTADO_CANCELADA,
+    ];
+
     protected $fillable = [
         'folio',
         'user_id',
         'total',
         'forma_pago',
+        'estado',
         'notas',
     ];
 
@@ -46,5 +62,30 @@ class Venta extends Model
     public function detalles(): HasMany
     {
         return $this->hasMany(VentaDetalle::class);
+    }
+
+    public function documentosPostventa(): HasMany
+    {
+        return $this->hasMany(DocumentoPostventa::class, 'venta_id');
+    }
+
+    /**
+     * Elegibilidad para devolución: si quedan detalles no devueltos.
+     */
+    public function esElegibleParaDevolucion(): bool
+    {
+        return in_array($this->estado, [self::ESTADO_ACTIVA, self::ESTADO_PARCIALMENTE_DEVUELTA], true);
+    }
+
+    /**
+     * Elegibilidad para cancelación total: solo ACTIVA y sin operación postventa previa.
+     */
+    public function esElegibleParaCancelacion(): bool
+    {
+        if ($this->estado !== self::ESTADO_ACTIVA) {
+            return false;
+        }
+
+        return ! $this->documentosPostventa()->exists();
     }
 }

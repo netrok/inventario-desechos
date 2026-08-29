@@ -20,6 +20,7 @@ class Item extends Model
         'RESERVADO',
         'REPARACION',
         'VENDIDO',
+        'DEVUELTO',
         'BAJA',
     ];
 
@@ -62,9 +63,15 @@ class Item extends Model
     /**
      * Transiciones manuales (cambio de estado por endpoint / formulario).
      *
-     * VENDIDO NO aparece aquí: no existe transición manual hacia VENDIDO.
-     * El único productor operativo de VENDIDO es el checkout del POS
-     * (PosController::checkout), que lo aplica dentro de su flujo atómico.
+     * VENDIDO NO aparece aquí como origen: no existe transición manual desde
+     * VENDIDO. Las únicas salidas operativas de VENDIDO son el flujo postventa
+     * controlado (PostventaService):
+     *   - CANCELACIÓN atómica: VENDIDO -> DISPONIBLE
+     *   - DEVOLUCIÓN atómica:  VENDIDO -> DEVUELTO
+     *
+     * DEVUELTO es un estado transitorio que sí admite salida por el flujo
+     * normal autorizado de cambio de estado (recepción/revisión del equipo):
+     * DEVUELTO -> DISPONIBLE | REPARACION | BAJA.
      */
     public static function canTransition(string $from, string $to): bool
     {
@@ -73,6 +80,7 @@ class Item extends Model
             'RESERVADO' => ['DISPONIBLE', 'BAJA'],
             'REPARACION' => ['DISPONIBLE', 'BAJA'],
             'VENDIDO' => [],
+            'DEVUELTO' => ['DISPONIBLE', 'REPARACION', 'BAJA'],
             'BAJA' => [],
         ];
 

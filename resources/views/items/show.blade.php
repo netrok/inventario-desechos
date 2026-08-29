@@ -15,6 +15,7 @@
                                 'RESERVADO'  => 'bg-amber-50 text-amber-700 border-amber-200',
                                 'REPARACION', 'REPARACIÓN' => 'bg-sky-50 text-sky-700 border-sky-200',
                                 'VENDIDO'    => 'bg-gray-100 text-gray-700 border-gray-200',
+                                'DEVUELTO'   => 'bg-indigo-50 text-indigo-700 border-indigo-200',
                                 'BAJA'       => 'bg-rose-50 text-rose-700 border-rose-200',
                                 default      => 'bg-gray-100 text-gray-700 border-gray-200',
                             };
@@ -272,13 +273,13 @@
 
                                     <label class="block text-xs font-medium text-gray-600">Cambiar estado</label>
                                     <select name="estado" class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
-                                        @foreach(array_diff(\App\Models\Item::ESTADOS, ['VENDIDO']) as $e)
+                                        @foreach(array_diff(\App\Models\Item::ESTADOS, ['VENDIDO', 'DEVUELTO']) as $e)
                                             <option value="{{ $e }}" @selected($item->estado === $e)>{{ $e }}</option>
                                         @endforeach
                                     </select>
                                     <p class="text-xs text-gray-500">
                                         BAJA retira el equipo de operación; el registro se conserva para trazabilidad.
-                                        VENDIDO solo se origina desde el POS.
+                                        VENDIDO y DEVUELTO se originan únicamente desde el POS/postventa.
                                     </p>
 
                                     <input name="notas" placeholder="Notas (opcional)"

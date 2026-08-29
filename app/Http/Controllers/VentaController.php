@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Venta;
 use App\Models\VentaDetalle;
+use App\Support\Money;
 use Illuminate\Http\Request;
 
 class VentaController extends Controller
@@ -26,6 +27,8 @@ class VentaController extends Controller
             'user',
             'detalles.item',
             'detalles.item.categoria',
+            'documentosPostventa.user',
+            'documentosPostventa.detalles.item',
         ]);
 
         return view('ventas.show', ['venta' => $venta]);
@@ -50,35 +53,12 @@ class VentaController extends Controller
         return view('ventas.ticket', [
             'venta' => $venta,
             'width' => $width,
-            'totalFormateado' => $this->formatearDecimal((string) $venta->total),
+            'totalFormateado' => Money::formatear((string) $venta->total),
             'preciosFormateados' => $venta->detalles->mapWithKeys(
                 fn (VentaDetalle $detalle) => [
-                    $detalle->id => $this->formatearDecimal((string) $detalle->precio),
+                    $detalle->id => Money::formatear((string) $detalle->precio),
                 ]
             ),
         ]);
-    }
-
-    /**
-     * Presentación de un decimal(12,2) ya persistido sin alterar la cantidad:
-     * agrega separador de miles por manipulación de string, sin aritmética float.
-     */
-    private function formatearDecimal(string $decimal): string
-    {
-        $negativo = str_starts_with($decimal, '-');
-        $num = $negativo ? substr($decimal, 1) : $decimal;
-
-        [$enteros, $centavos] = array_pad(explode('.', $num), 2, '00');
-
-        $grupos = [];
-        $pos = strlen($enteros);
-
-        while ($pos > 0) {
-            $inicio = max(0, $pos - 3);
-            $grupos[] = substr($enteros, $inicio, $pos - $inicio);
-            $pos = $inicio;
-        }
-
-        return ($negativo ? '-' : '').implode(',', array_reverse($grupos)).'.'.$centavos;
     }
 }

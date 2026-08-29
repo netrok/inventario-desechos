@@ -4,6 +4,7 @@ use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\PostventaController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UbicacionController;
@@ -150,6 +151,38 @@ Route::middleware(['auth'])->group(function () {
     // Ticket imprimible (consultas: imprimir/reimprimir es lectura).
     Route::get('ventas/{venta}/ticket', [VentaController::class, 'ticket'])
         ->name('ventas.ticket')
+        ->middleware('permission:ventas.ver');
+
+    /**
+     * =========================
+     * Postventa: cancelaciones y devoluciones atómicas
+     * =========================
+     */
+    // Cancelación (Admin): reversa TOTAL. El GET solo muestra el formulario.
+    Route::get('ventas/{venta}/cancelar', [PostventaController::class, 'cancelarForm'])
+        ->name('ventas.cancelar')
+        ->middleware('permission:ventas.cancelar');
+
+    Route::post('ventas/{venta}/cancelar', [PostventaController::class, 'cancelar'])
+        ->name('ventas.cancelar.store')
+        ->middleware('permission:ventas.cancelar');
+
+    // Devolución (Admin + Ventas): parcial o total.
+    Route::get('ventas/{venta}/devolver', [PostventaController::class, 'devolverForm'])
+        ->name('ventas.devolver')
+        ->middleware('permission:ventas.devolver');
+
+    Route::post('ventas/{venta}/devolver', [PostventaController::class, 'devolver'])
+        ->name('ventas.devolver.store')
+        ->middleware('permission:ventas.devolver');
+
+    // Consulta de documentos postventa (Auditor puede consultarlos vía ventas.ver).
+    Route::get('postventa/{documento}', [PostventaController::class, 'show'])
+        ->name('postventa.show')
+        ->middleware('permission:ventas.ver');
+
+    Route::get('postventa/{documento}/print', [PostventaController::class, 'print'])
+        ->name('postventa.print')
         ->middleware('permission:ventas.ver');
 
     /**

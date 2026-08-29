@@ -40,6 +40,7 @@ dataset('matriz_rol_permisos', [
         'items.ver',
         'ventas.ver',
         'ventas.crear',
+        'ventas.devolver',
     ]],
 ]);
 
@@ -273,4 +274,75 @@ it('el rol Admin puede operar el POS y consultar ventas', function () {
 
     $this->actingAs($user)->get(route('pos.index'))->assertOk();
     $this->actingAs($user)->get(route('ventas.index'))->assertOk();
+});
+
+it('el rol Ventas puede devolver equipos pero no cancelar la venta', function () {
+    $venta = \App\Models\Venta::create([
+        'user_id' => User::factory()->create()->id,
+        'total' => 100,
+        'forma_pago' => 'EFECTIVO',
+    ]);
+    $user = User::factory()->create();
+    $user->assignRole('Ventas');
+
+    $this->actingAs($user)->get(route('ventas.devolver', $venta))->assertOk();
+    $this->actingAs($user)->post(route('ventas.devolver.store', $venta), [
+        'detalles' => [],
+        'motivo' => 'Cliente no conforme.',
+        'forma_reembolso' => 'EFECTIVO',
+    ])->assertStatus(302);
+
+    $this->actingAs($user)->get(route('ventas.cancelar', $venta))->assertForbidden();
+    $this->actingAs($user)->post(route('ventas.cancelar.store', $venta), [
+        'motivo' => 'Pedido por error.',
+    ])->assertForbidden();
+});
+
+it('el rol Admin accede a cancelar y devolver equipos', function () {
+    $venta = \App\Models\Venta::create([
+        'user_id' => User::factory()->create()->id,
+        'total' => 100,
+        'forma_pago' => 'EFECTIVO',
+    ]);
+    $user = User::factory()->create();
+    $user->assignRole('Admin');
+
+    $this->actingAs($user)->get(route('ventas.cancelar', $venta))->assertOk();
+    $this->actingAs($user)->get(route('ventas.devolver', $venta))->assertOk();
+});
+
+it('el rol Auditor consulta documentos postventa pero no opera postventa', function () {
+    $user = User::factory()->create();
+    $user->assignRole('Auditor');
+    $venta = \App\Models\Venta::create([
+        'user_id' => $user->id,
+        'total' => 100,
+        'forma_pago' => 'EFECTIVO',
+    ]);
+    $documento = \App\Models\DocumentoPostventa::create([
+        'venta_id' => $venta->id,
+        'user_id' => $user->id,
+        'tipo' => 'DEVOLUCION',
+        'total' => 50,
+        'motivo' => 'Prueba de consulta.',
+    ]);
+
+    $this->actingAs($user)->get(route('postventa.show', $documento))->assertOk();
+    $this->actingAs($user)->get(route('postventa.print', $documento))->assertOk();
+
+    $this->actingAs($user)->get(route('ventas.cancelar', $venta))->assertForbidden();
+    $this->actingAs($user)->get(route('ventas.devolver', $venta))->assertForbidden();
+});
+
+it('el rol Almacen no opera postventa', function () {
+    $venta = \App\Models\Venta::create([
+        'user_id' => User::factory()->create()->id,
+        'total' => 100,
+        'forma_pago' => 'EFECTIVO',
+    ]);
+    $user = User::factory()->create();
+    $user->assignRole('Almacen');
+
+    $this->actingAs($user)->get(route('ventas.cancelar', $venta))->assertForbidden();
+    $this->actingAs($user)->get(route('ventas.devolver', $venta))->assertForbidden();
 });
