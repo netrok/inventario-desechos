@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Item;
+use App\Models\Movimiento;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -122,4 +124,85 @@ it('permite a un Admin borrar un usuario sin ventas (y sin ser ultimo admin)', f
         ->assertRedirect('/admin/users');
 
     $this->assertDatabaseMissing('users', ['id' => $vendedor->id]);
+});
+
+it('impide a un Admin borrar un usuario con movimientos y conserva el actor', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin');
+
+    $operador = User::factory()->create();
+    $item = Item::create(['estado' => 'DISPONIBLE']);
+    $movimiento = Movimiento::create([
+        'item_id' => $item->id,
+        'user_id' => $operador->id,
+        'tipo' => 'ALTA',
+        'a_estado' => 'DISPONIBLE',
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->delete(route('admin.users.destroy', $operador));
+
+    $response->assertSessionHas('error', 'No se puede eliminar este usuario porque tiene movimientos registrados.');
+
+    $this->assertDatabaseHas('users', ['id' => $operador->id]);
+    $this->assertDatabaseHas('movimientos', ['id' => $movimiento->id, 'user_id' => $operador->id]);
+});
+
+it('no permite quitar el rol Admin al último administrador y no aplica cambios parciales', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin'); // único Admin
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.users.edit', $admin))
+        ->put(route('admin.users.update', $admin), [
+            'name' => 'Renombrado',
+            'email' => $admin->email,
+            'roles' => ['Operador'],
+        ]);
+
+    $response->assertSessionHas('error', 'No puedes quitar el rol Admin al último administrador.');
+
+    $admin->refresh();
+    expect($admin->hasRole('Admin'))->toBeTrue();
+    expect($admin->name)->not->toBe('Renombrado');
+});
+
+it('permite degradar a un Admin cuando existe otro Admin', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin');
+
+    $otro = User::factory()->create();
+    $otro->assignRole('Admin');
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.users.edit', $otro))
+        ->put(route('admin.users.update', $otro), [
+            'name' => $otro->name,
+            'email' => $otro->email,
+            'roles' => ['Operador'],
+        ]);
+
+    $response->assertRedirect(route('admin.users.index'));
+
+    $otro->refresh();
+    expect($otro->hasRole('Admin'))->toBeFalse();
+    expect($otro->hasRole('Operador'))->toBeTrue();
+});
+
+it('permite cambios normales a un Admin conservando su rol', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin'); // único Admin
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.users.edit', $admin))
+        ->put(route('admin.users.update', $admin), [
+            'name' => 'Admin Nombre Nuevo',
+            'email' => $admin->email,
+            'roles' => ['Admin'],
+        ]);
+
+    $response->assertRedirect(route('admin.users.index'));
+    $admin->refresh();
+    expect($admin->name)->toBe('Admin Nombre Nuevo');
+    expect($admin->hasRole('Admin'))->toBeTrue();
 });

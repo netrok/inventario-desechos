@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\Categoria;
 use App\Models\Item;
+use App\Models\Ubicacion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -175,4 +177,125 @@ it('bloquea mover a un usuario sin items.mover', function () {
     $this->actingAs($user)
         ->post(route('items.moveUbicacion', $item->id), ['ubicacion_id' => ''])
         ->assertForbidden();
+});
+
+/**
+ * =========================
+ * Granularidad de PUT /items/{item}
+ * items.editar ⇒ datos descriptivos/precio/foto
+ * estado ⇒ items.cambiar_estado · ubicación ⇒ items.mover
+ * =========================
+ */
+it('edita marca/modelo/precio con items.editar aunque no tenga los permisos de ciclo de vida', function () {
+    $categoria = Categoria::create(['nombre' => 'Equipos']);
+    $ubicacion = Ubicacion::create(['nombre' => 'Almacén']);
+    $item = Item::create([
+        'estado' => 'DISPONIBLE',
+        'categoria_id' => $categoria->id,
+        'ubicacion_id' => $ubicacion->id,
+    ]);
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.editar');
+
+    $this->actingAs($user)
+        ->put(route('items.update', $item), [
+            'categoria_id' => $categoria->id,
+            'marca' => 'MarcaNueva',
+            'modelo' => 'ModeloNuevo',
+            'precio' => '125.50',
+        ])
+        ->assertRedirect(route('items.show', $item))
+        ->assertSessionHasNoErrors();
+
+    $item->refresh();
+    expect($item->marca)->toBe('MarcaNueva');
+    expect($item->modelo)->toBe('ModeloNuevo');
+    expect((string) $item->precio)->toBe('125.50');
+    expect($item->estado)->toBe('DISPONIBLE');
+});
+
+it('rechaza cambiar el estado vía update sin items.cambiar_estado', function () {
+    $categoria = Categoria::create(['nombre' => 'Equipos']);
+    $ubicacion = Ubicacion::create(['nombre' => 'Almacén']);
+    $item = Item::create([
+        'estado' => 'DISPONIBLE',
+        'categoria_id' => $categoria->id,
+        'ubicacion_id' => $ubicacion->id,
+    ]);
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.editar');
+
+    $this->actingAs($user)
+        ->put(route('items.update', $item), [
+            'categoria_id' => $categoria->id,
+            'estado' => 'REPARACION',
+        ])
+        ->assertSessionHasErrors('estado');
+
+    expect($item->refresh()->estado)->toBe('DISPONIBLE');
+    $this->assertDatabaseMissing('movimientos', ['item_id' => $item->id]);
+});
+
+it('rechaza mover la ubicación vía update sin items.mover', function () {
+    $categoria = Categoria::create(['nombre' => 'Equipos']);
+    $almacen = Ubicacion::create(['nombre' => 'Almacén']);
+    $otra = Ubicacion::create(['nombre' => 'Bodega B']);
+    $item = Item::create([
+        'estado' => 'DISPONIBLE',
+        'categoria_id' => $categoria->id,
+        'ubicacion_id' => $almacen->id,
+    ]);
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.editar');
+
+    $this->actingAs($user)
+        ->put(route('items.update', $item), [
+            'categoria_id' => $categoria->id,
+            'ubicacion_id' => $otra->id,
+        ])
+        ->assertSessionHasErrors('ubicacion_id');
+
+    expect($item->refresh()->ubicacion_id)->toBe($almacen->id);
+    $this->assertDatabaseMissing('movimientos', ['item_id' => $item->id]);
+});
+
+it('permite cambiar estado y mover vía update con los permisos específicos', function () {
+    $categoria = Categoria::create(['nombre' => 'Equipos']);
+    $almacen = Ubicacion::create(['nombre' => 'Almacén']);
+    $otra = Ubicacion::create(['nombre' => 'Bodega B']);
+    $item = Item::create([
+        'estado' => 'DISPONIBLE',
+        'categoria_id' => $categoria->id,
+        'ubicacion_id' => $almacen->id,
+    ]);
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.editar', 'items.cambiar_estado', 'items.mover');
+
+    $this->actingAs($user)
+        ->put(route('items.update', $item), [
+            'categoria_id' => $categoria->id,
+            'estado' => 'REPARACION',
+            'ubicacion_id' => $otra->id,
+        ])
+        ->assertRedirect(route('items.show', $item))
+        ->assertSessionHasNoErrors();
+
+    $item->refresh();
+    expect($item->estado)->toBe('REPARACION');
+    expect($item->ubicacion_id)->toBe($otra->id);
+
+    // Un solo Movimiento (AJUSTE) registra ambos cambios; no se duplican.
+    $this->assertDatabaseHas('movimientos', [
+        'item_id' => $item->id,
+        'tipo' => 'AJUSTE',
+        'de_estado' => 'DISPONIBLE',
+        'a_estado' => 'REPARACION',
+        'de_ubicacion_id' => $almacen->id,
+        'a_ubicacion_id' => $otra->id,
+    ]);
+    expect(\App\Models\Movimiento::where('item_id', $item->id)->count())->toBe(1);
 });

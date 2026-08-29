@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Item;
+use App\Models\Movimiento;
 use App\Models\Ubicacion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -102,4 +104,41 @@ it('usuario con ubicaciones.eliminar puede eliminar', function () {
         ->assertRedirect(route('ubicaciones.index'));
 
     $this->assertDatabaseMissing('ubicaciones', ['id' => $ubicacion->id]);
+});
+
+it('no permite eliminar una ubicacion referenciada por movimientos', function () {
+    $ubicacion = Ubicacion::create(['nombre' => 'Histórica']);
+    $item = Item::create(['estado' => 'DISPONIBLE']);
+
+    $movimiento = Movimiento::create([
+        'item_id' => $item->id,
+        'tipo' => 'ALTA',
+        'a_estado' => 'DISPONIBLE',
+        'a_ubicacion_id' => $ubicacion->id,
+    ]);
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('ubicaciones.eliminar');
+
+    $this->actingAs($user)
+        ->delete(route('ubicaciones.destroy', $ubicacion))
+        ->assertSessionHas('error', 'No puedes eliminar esta ubicación porque es referencia de movimientos históricos.');
+
+    $this->assertDatabaseHas('ubicaciones', ['id' => $ubicacion->id]);
+    $this->assertDatabaseHas('movimientos', ['id' => $movimiento->id, 'a_ubicacion_id' => $ubicacion->id]);
+});
+
+it('no permite eliminar una ubicacion con items soft-deleted legacy', function () {
+    $ubicacion = Ubicacion::create(['nombre' => 'Legacy']);
+    $item = Item::create(['estado' => 'DISPONIBLE', 'ubicacion_id' => $ubicacion->id]);
+    $item->delete();
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('ubicaciones.eliminar');
+
+    $this->actingAs($user)
+        ->delete(route('ubicaciones.destroy', $ubicacion))
+        ->assertSessionHas('error', 'No puedes eliminar esta ubicación porque tiene items asignados (incluidos históricos).');
+
+    $this->assertDatabaseHas('ubicaciones', ['id' => $ubicacion->id]);
 });

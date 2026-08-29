@@ -59,11 +59,18 @@ class Item extends Model
         });
     }
 
+    /**
+     * Transiciones manuales (cambio de estado por endpoint / formulario).
+     *
+     * VENDIDO NO aparece aquí: no existe transición manual hacia VENDIDO.
+     * El único productor operativo de VENDIDO es el checkout del POS
+     * (PosController::checkout), que lo aplica dentro de su flujo atómico.
+     */
     public static function canTransition(string $from, string $to): bool
     {
         $map = [
-            'DISPONIBLE' => ['RESERVADO', 'REPARACION', 'BAJA', 'VENDIDO'],
-            'RESERVADO' => ['DISPONIBLE', 'VENDIDO', 'BAJA'],
+            'DISPONIBLE' => ['RESERVADO', 'REPARACION', 'BAJA'],
+            'RESERVADO' => ['DISPONIBLE', 'BAJA'],
             'REPARACION' => ['DISPONIBLE', 'BAJA'],
             'VENDIDO' => [],
             'BAJA' => [],

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Categoria;
+use App\Models\Item;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -102,4 +103,19 @@ it('usuario con categorias.eliminar puede eliminar', function () {
         ->assertRedirect(route('categorias.index'));
 
     $this->assertDatabaseMissing('categorias', ['id' => $categoria->id]);
+});
+
+it('no permite eliminar una categoria con items soft-deleted legacy', function () {
+    $categoria = Categoria::create(['nombre' => 'Legacy']);
+    $item = Item::create(['estado' => 'DISPONIBLE', 'categoria_id' => $categoria->id]);
+    $item->delete();
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('categorias.eliminar');
+
+    $this->actingAs($user)
+        ->delete(route('categorias.destroy', $categoria))
+        ->assertSessionHas('error', 'No se puede eliminar: hay items asignados a esta categoría.');
+
+    $this->assertDatabaseHas('categorias', ['id' => $categoria->id]);
 });

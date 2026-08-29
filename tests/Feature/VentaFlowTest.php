@@ -267,6 +267,38 @@ it('no permite agregar un equipo sin precio asignado', function () {
         ->assertSessionHasErrors('codigo');
 });
 
+it('un estado desconocido/corrupto en BD no es vendible ni por agregar ni por checkout', function () {
+    $user = posSeller();
+    $item = posItem(500.0);
+
+    // Estado corrupto inyectado directamente (no pasa por la app).
+    \Illuminate\Support\Facades\DB::table('items')
+        ->where('id', $item->id)
+        ->update(['estado' => 'EXTRAVIADO']);
+
+    $this->actingAs($user)
+        ->post(route('pos.add'), ['codigo' => $item->codigo])
+        ->assertSessionHasErrors('codigo');
+
+    expect(session('errors')->first('codigo'))
+        ->toContain('no se encuentra en un estado vendible');
+    expect(session('pos.cart'))->toBeNull();
+
+    // Checkout directo sobre el mismo equipo tampoco debe producir venta.
+    $this->session(['pos.cart' => [$item->id]]);
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), [
+            'items' => [$item->id],
+            'forma_pago' => 'EFECTIVO',
+        ])
+        ->assertSessionHasErrors('items');
+
+    $this->assertDatabaseCount('ventas', 0);
+    $this->assertDatabaseCount('venta_detalles', 0);
+    $this->assertDatabaseCount('movimientos', 0);
+});
+
 /**
  * =========================
  * Estados no vendibles en checkout (abortan TODA la venta)

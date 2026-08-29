@@ -50,36 +50,25 @@ test('email verification status is unchanged when the email address is unchanged
     $this->assertNotNull($user->refresh()->email_verified_at);
 });
 
-test('user can delete their account', function () {
-    $user = User::factory()->create();
-
-    $response = $this
-        ->actingAs($user)
-        ->delete('/profile', [
-            'password' => 'password',
-        ]);
-
-    $response
-        ->assertSessionHasNoErrors()
-        ->assertRedirect('/');
-
-    $this->assertGuest();
-    $this->assertNull($user->fresh());
-});
-
-test('correct password must be provided to delete account', function () {
+test('la auto-eliminación de la cuenta está deshabilitada (DELETE /profile responde 405)', function () {
     $user = User::factory()->create();
 
     $response = $this
         ->actingAs($user)
         ->from('/profile')
         ->delete('/profile', [
-            'password' => 'wrong-password',
+            'password' => 'password',
         ]);
 
-    $response
-        ->assertSessionHasErrorsIn('userDeletion', 'password')
-        ->assertRedirect('/profile');
+    $response->assertStatus(405);
 
     $this->assertNotNull($user->fresh());
+    $this->assertAuthenticatedAs($user);
+});
+
+test('no existe la ruta profile.destroy ni el formulario de auto-eliminación', function () {
+    expect(\Illuminate\Support\Facades\Route::has('profile.destroy'))->toBeFalse();
+    expect(
+        in_array('delete-user-form', scandir(resource_path('views/profile/partials')))
+    )->toBeFalse();
 });

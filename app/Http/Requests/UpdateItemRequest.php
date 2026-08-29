@@ -28,9 +28,12 @@ class UpdateItemRequest extends FormRequest
 
             // ✅ Catálogo real
             'categoria_id' => ['required', 'integer', 'exists:categorias,id'],
-            'ubicacion_id' => ['required', 'integer', 'exists:ubicaciones,id'],
 
-            'estado' => ['required', Rule::in(Item::ESTADOS)],
+            // Estado/ubicación son OPCIONALES en Editar: se gestionan mediante los
+            // endpoints especializados (items.cambiar_estado / items.mover).
+            // Si se envían, el controller comprueba el permiso granular al detectar cambio.
+            'ubicacion_id' => ['nullable', 'integer', 'exists:ubicaciones,id'],
+            'estado' => ['nullable', Rule::in(Item::ESTADOS)],
 
             'notas' => ['nullable', 'string', 'max:1000'],
 

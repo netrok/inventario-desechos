@@ -70,6 +70,16 @@ class UserController extends Controller
     {
         $data = $request->validated();
 
+        // El último Admin nunca puede perder el rol Admin (ni por democión).
+        $rolesSent = $data['roles'] ?? [];
+        if ($user->hasRole('Admin')
+            && ! in_array('Admin', $rolesSent, true)
+            && User::role('Admin')->count() <= 1) {
+            return back()
+                ->with('error', 'No puedes quitar el rol Admin al último administrador.')
+                ->withInput();
+        }
+
         $user->fill([
             'name' => $data['name'],
             'email' => $data['email'],
@@ -80,7 +90,7 @@ class UserController extends Controller
         }
 
         $user->save();
-        $user->syncRoles($data['roles'] ?? []);
+        $user->syncRoles($rolesSent);
 
         return redirect()
             ->route('admin.users.index')
@@ -105,6 +115,11 @@ class UserController extends Controller
         // No borrar un usuario con ventas: perdería el actor histórico.
         if ($user->ventas()->exists()) {
             return back()->with('error', 'No se puede eliminar este usuario porque tiene ventas registradas.');
+        }
+
+        // No borrar un usuario con movimientos: perdería el actor histórico.
+        if ($user->movimientos()->exists()) {
+            return back()->with('error', 'No se puede eliminar este usuario porque tiene movimientos registrados.');
         }
 
         $user->delete();

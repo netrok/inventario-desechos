@@ -28,7 +28,9 @@ class StoreItemRequest extends FormRequest
             'categoria_id' => ['required', 'integer', 'exists:categorias,id'],
             'ubicacion_id' => ['required', 'integer', 'exists:ubicaciones,id'],
 
-            'estado' => ['required', Rule::in(Item::ESTADOS)],
+            // ✅ NUNCA se da de alta un Item directamente como VENDIDO:
+            // VENDIDO solo puede originarse desde el checkout POS atómico.
+            'estado' => ['required', Rule::in(Item::ESTADOS), Rule::notIn(['VENDIDO'])],
 
             'notas' => ['nullable', 'string', 'max:1000'],
 
@@ -44,6 +46,7 @@ class StoreItemRequest extends FormRequest
     {
         return [
             'estado.in' => 'El estado seleccionado no es válido.',
+            'estado.not_in' => 'Un equipo no puede darse de alta directamente como VENDIDO. VENDIDO solo se origina desde el POS.',
             'categoria_id.required' => 'Selecciona una categoría.',
             'categoria_id.exists' => 'La categoría seleccionada no existe.',
             'ubicacion_id.required' => 'Selecciona una ubicación.',

@@ -272,12 +272,13 @@
 
                                     <label class="block text-xs font-medium text-gray-600">Cambiar estado</label>
                                     <select name="estado" class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
-                                        @foreach(\App\Models\Item::ESTADOS as $e)
+                                        @foreach(array_diff(\App\Models\Item::ESTADOS, ['VENDIDO']) as $e)
                                             <option value="{{ $e }}" @selected($item->estado === $e)>{{ $e }}</option>
                                         @endforeach
                                     </select>
                                     <p class="text-xs text-gray-500">
                                         BAJA retira el equipo de operación; el registro se conserva para trazabilidad.
+                                        VENDIDO solo se origina desde el POS.
                                     </p>
 
                                     <input name="notas" placeholder="Notas (opcional)"

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Categoria;
+use App\Models\Item;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -76,8 +77,13 @@ class CategoriaController extends Controller
 
     public function destroy(Categoria $categoria)
     {
-        // Conservador y seguro: no borrar si está en uso
-        if ($categoria->items()->exists()) {
+        // Conservador y seguro: no borrar si está en uso (incluye items
+        // soft-deleted legacy; la FK protege igualmente, pero el guard UX
+        // evita el salto a la excepción de integridad).
+        $enUso = $categoria->items()->exists()
+            || Item::withTrashed()->where('categoria_id', $categoria->id)->exists();
+
+        if ($enUso) {
             return back()->with('error', 'No se puede eliminar: hay items asignados a esta categoría.');
         }
 

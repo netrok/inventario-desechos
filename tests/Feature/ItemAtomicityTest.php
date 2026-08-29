@@ -82,7 +82,7 @@ it('store hace rollback si falla el Movimiento ALTA y limpia la foto', function 
 
 it('update hace rollback si falla el Movimiento y conserva la foto anterior', function () {
     $user = User::factory()->create();
-    $user->givePermissionTo('items.editar');
+    $user->givePermissionTo('items.editar', 'items.cambiar_estado', 'items.mover');
 
     $categoria = Categoria::create(['nombre' => 'Tecnología']);
     $ubicacionA = Ubicacion::create(['nombre' => 'Almacén']);

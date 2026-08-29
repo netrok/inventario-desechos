@@ -29,11 +29,12 @@ class PosController extends Controller
     private function estadoError(Item $item): ?string
     {
         return match ($item->estado) {
+            'DISPONIBLE' => null,
             'RESERVADO' => "El equipo {$item->codigo} está RESERVADO y no puede venderse desde POS.",
             'REPARACION' => "El equipo {$item->codigo} está en REPARACIÓN y no puede venderse desde POS.",
             'VENDIDO' => "El equipo {$item->codigo} ya fue vendido.",
             'BAJA' => "El equipo {$item->codigo} está dado de baja.",
-            default => null,
+            default => "El equipo {$item->codigo} no se encuentra en un estado vendible.",
         };
     }
 

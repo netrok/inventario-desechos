@@ -278,6 +278,26 @@ class ItemController extends Controller
         $data = $request->validated();
         $deleteFoto = $request->boolean('delete_foto');
 
+        // Permisos granulares: Editar (items.editar) NO sustituye a
+        // items.cambiar_estado ni a items.mover. Estado y ubicación solo
+        // cambian vía sus endpoints especializados (o si el usuario posee
+        // el permiso correspondiente).
+        if (array_key_exists('estado', $data)
+            && (string) $item->estado !== (string) $data['estado']
+            && ! $request->user()->can('items.cambiar_estado')) {
+            throw ValidationException::withMessages([
+                'estado' => 'No tienes permiso para cambiar el estado (items.cambiar_estado).',
+            ]);
+        }
+
+        if (array_key_exists('ubicacion_id', $data)
+            && (string) $item->ubicacion_id !== (string) $data['ubicacion_id']
+            && ! $request->user()->can('items.mover')) {
+            throw ValidationException::withMessages([
+                'ubicacion_id' => 'No tienes permiso para mover este equipo (items.mover).',
+            ]);
+        }
+
         $toEstado = $data['estado'] ?? $item->estado;
         if ($item->estado !== $toEstado && ! Item::canTransition($item->estado, $toEstado)) {
             return back()->withErrors([
@@ -396,7 +416,7 @@ class ItemController extends Controller
                 Movimiento::create([
                     'item_id' => $locked->id,
                     'user_id' => Auth::id(),
-                    'tipo' => $to === 'BAJA' ? Movimiento::TIPO_BAJA : ($to === 'VENDIDO' ? Movimiento::TIPO_VENTA : Movimiento::TIPO_CAMBIO_ESTADO),
+                    'tipo' => $to === 'BAJA' ? Movimiento::TIPO_BAJA : Movimiento::TIPO_CAMBIO_ESTADO,
                     'de_estado' => $from,
                     'a_estado' => $to,
                     'de_ubicacion_id' => $ubicacionActual,
