@@ -28,7 +28,7 @@ Sistema web de **inventario y ventas** para equipos/desechos tecnológicos. Cont
 | **Categorías** | Catálogo con nombre único. |
 | **Ubicaciones** | Catálogo con nombre único y descripción. |
 | **Reportes** | Inventario y movimientos (web, PDF, XLSX) con filtros y trazabilidad. |
-| **Usuarios** | CRUD completo con asignación de roles (no se puede borrar el último Admin ni a quien tiene ventas). |
+| **Usuarios** | CRUD completo con asignación de roles (el último Admin no puede eliminarse ni perder el rol Admin; los usuarios con ventas o movimientos históricos no pueden eliminarse). |
 | **Roles/permisos** | Matriz fija de 21 permisos en 4 grupos operativos + 2 roles legacy. |
 | **Mini POS** | Carrito por sesión, escáner para agregar, venta atómica con `lockForUpdate`. |
 | **Ventas** | Folio `VTA-XXXXXX`, detalle, actor (`user_id`) con FK RESTRICT. |
@@ -52,6 +52,7 @@ Sistema web de **inventario y ventas** para equipos/desechos tecnológicos. Cont
 - Cada `Item` recibe un código único `ITM-XXXXXX` desde la secuencia PostgreSQL `items_codigo_seq_generator`. Los huecos numéricos son normales y no se reutilizan.
 - Estados: `DISPONIBLE`, `RESERVADO`, `REPARACION`, `VENDIDO`, `BAJA`.
 - `VENDIDO` y `BAJA` son **terminales** (las transiciones se validan en servidor con row lock).
+- `VENDIDO` solo se origina mediante el **checkout del POS**: no existe transición manual hacia `VENDIDO` (ni desde el formulario de edición ni desde el cambio de estado).
 - `SoftDeletes` existe como **salvaguarda técnica/legacy**: NO hay papelería operativa ni rutas de restaurar/borrar definitivo.
 - Cada operación relevante genera un `Movimiento` con estado anterior/posterior, ubicación, usuario actor y evidencia opcional.
 
@@ -97,11 +98,12 @@ php artisan serve  # o tu servidor web
 
 ```bash
 cp .env.testing.example .env.testing   # DB de pruebas aislada
-php artisan test                       # suite completa (194 tests / 619 assertions)
+php artisan test                       # suite completa (222 tests / 734 assertions / 0 failures)
 php artisan migrate:fresh --seed --env=testing   # instala limpia de pruebas
+php artisan migrate:status --env=testing        # 23 Ran / 0 Pending
 ```
 
-La suite cubre matriz de roles, atomicidad del POS, dinero exacto en centavos, ticket con precios históricos, FK/UNIQUE de PostgreSQL y trazabilidad.
+La suite cubre matriz de roles, atomicidad del POS, dinero exacto en centavos, ticket con precios históricos, FK/UNIQUE de PostgreSQL, integridad de trazabilidad (actor y ubicaciones históricas) y permisos granulares de Items.
 
 ---
 
@@ -132,7 +134,7 @@ php artisan optimize
 ## Notas técnicas
 
 - Secuencias PostgreSQL: `items_codigo_seq_generator`, `ventas_folio_seq_generator` (nunca `MAX()+1`; los gaps son normales).
-- FKs críticas: `movimientos.item_id → items (RESTRICT)`, `venta_detalles.item_id → items (RESTRICT + UNIQUE)`, `ventas.user_id → users (RESTRICT + NOT NULL)`.
+- FKs críticas (RESTRICT): `movimientos.item_id → items`, `movimientos.user_id → users`, `movimientos.de_ubicacion_id → ubicaciones`, `movimientos.a_ubicacion_id → ubicaciones`, `venta_detalles.item_id → items (RESTRICT + UNIQUE)`, `ventas.user_id → users (RESTRICT + NOT NULL)`.
 - Listados principales paginados (15/25) y con eager loading (sin N+1).
 
 ---
