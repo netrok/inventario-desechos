@@ -30,6 +30,8 @@ class ReportController extends Controller
         Movimiento::TIPO_BAJA,
         Movimiento::TIPO_VENTA,
         Movimiento::TIPO_RESTAURAR,
+        Movimiento::TIPO_CANCELACION_VENTA,
+        Movimiento::TIPO_DEVOLUCION_VENTA,
     ];
 
     public function index()

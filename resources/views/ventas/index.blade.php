@@ -40,6 +40,7 @@
                                 <th class="px-5 py-3">Usuario</th>
                                 <th class="px-5 py-3 text-right">Equipos</th>
                                 <th class="px-5 py-3">Forma de pago</th>
+                                <th class="px-5 py-3">Estado</th>
                                 <th class="px-5 py-3 text-right">Total</th>
                             </tr>
                         </thead>
@@ -59,6 +60,9 @@
                                         <span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
                                             {{ $venta->forma_pago }}
                                         </span>
+                                    </td>
+                                    <td class="px-5 py-3">
+                                        <x-estado-badge :estado="$venta->estado ?? 'ACTIVA'" />
                                     </td>
                                     <td class="px-5 py-3 text-right font-semibold text-gray-900">{{ number_format((float) $venta->total, 2) }}</td>
                                 </tr>

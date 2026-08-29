@@ -117,6 +117,13 @@ class UserController extends Controller
             return back()->with('error', 'No se puede eliminar este usuario porque tiene ventas registradas.');
         }
 
+        // No borrar un usuario con documentos postventa: perdería el actor de
+        // cancelaciones/devoluciones. Defensa EXPLÍCITA (no depender solo de que
+        // toda postventa genere obligatoriamente un Movimiento con el mismo actor).
+        if ($user->documentosPostventa()->exists()) {
+            return back()->with('error', 'No se puede eliminar este usuario porque tiene documentos postventa registrados.');
+        }
+
         // No borrar un usuario con movimientos: perdería el actor histórico.
         if ($user->movimientos()->exists()) {
             return back()->with('error', 'No se puede eliminar este usuario porque tiene movimientos registrados.');

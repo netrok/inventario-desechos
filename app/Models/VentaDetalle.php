@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class VentaDetalle extends Model
 {
@@ -29,5 +30,10 @@ class VentaDetalle extends Model
         // Una Venta histórica sigue siendo consultable aunque el Item quede
         // soft-deleted por un mecanismo técnico/legacy. Sin restaurar ni mutar.
         return $this->belongsTo(Item::class, 'item_id')->withTrashed();
+    }
+
+    public function documentoPostventaDetalle(): HasOne
+    {
+        return $this->hasOne(DocumentoPostventaDetalle::class, 'venta_detalle_id');
     }
 }

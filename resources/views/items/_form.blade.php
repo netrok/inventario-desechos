@@ -169,7 +169,7 @@
                         name="estado"
                         class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('estado') border-rose-300 ring-rose-200 @enderror"
                     >
-                        @foreach(array_diff($estados, ['VENDIDO']) as $e)
+                        @foreach(array_diff($estados, ['VENDIDO', 'DEVUELTO']) as $e)
                             <option value="{{ $e }}" @selected(old('estado', $item->estado ?? 'DISPONIBLE') === $e)>{{ $e }}</option>
                         @endforeach
                     </select>

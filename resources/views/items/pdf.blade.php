@@ -130,6 +130,7 @@
             'RESERVADO'  => 'b-warn',
             'REPARACION', 'REPARACIÓN' => 'b-info',
             'VENDIDO'    => 'b-gray',
+            'DEVUELTO'   => 'b-info',
             'BAJA'       => 'b-bad',
             default      => 'b-gray',
         };

@@ -61,6 +61,10 @@ class RolesAndAdminSeeder extends Seeder
             'ventas.ver',
             'ventas.crear',
 
+            // Postventa: cancelación (reversa total) y devoluciones
+            'ventas.cancelar',
+            'ventas.devolver',
+
             // Categorías
             'categorias.ver',
             'categorias.crear',
@@ -108,12 +112,14 @@ class RolesAndAdminSeeder extends Seeder
             'ubicaciones.ver', 'ubicaciones.crear', 'ubicaciones.editar',
         ]);
 
-        // Ventas (POS: consulta + registro de ventas)
+        // Ventas (POS: consulta + registro de ventas + devoluciones; NO cancela).
+        // La cancelación es una reversa financiera total reservada a Admin.
         $ventasRole->syncPermissions([
             'dashboard.ver',
             'items.ver',
             'ventas.ver',
             'ventas.crear',
+            'ventas.devolver',
         ]);
 
         // Auditor (solo lectura)

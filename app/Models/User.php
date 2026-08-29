@@ -57,4 +57,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Movimiento::class, 'user_id');
     }
+
+    public function documentosPostventa(): HasMany
+    {
+        return $this->hasMany(DocumentoPostventa::class, 'user_id');
+    }
 }

@@ -48,6 +48,7 @@
                     ['label'=>'Reservado',  'key'=>'RESERVADO',  'val'=>$stats->reservado ?? 0,  'cls'=>'bg-white',      'chip'=>'bg-amber-50 text-amber-700'],
                     ['label'=>'Reparación', 'key'=>'REPARACION', 'val'=>$stats->reparacion ?? 0, 'cls'=>'bg-white',      'chip'=>'bg-blue-50 text-blue-700'],
                     ['label'=>'Vendido',    'key'=>'VENDIDO',    'val'=>$stats->vendido ?? 0,    'cls'=>'bg-white',      'chip'=>'bg-slate-100 text-slate-700'],
+                    ['label'=>'Devuelto',   'key'=>'DEVUELTO',   'val'=>$stats->devuelto ?? 0,   'cls'=>'bg-white',      'chip'=>'bg-indigo-50 text-indigo-700'],
                     ['label'=>'Baja',       'key'=>'BAJA',       'val'=>$stats->baja ?? 0,       'cls'=>'bg-white',      'chip'=>'bg-rose-50 text-rose-700'],
                 ];
 
@@ -58,7 +59,7 @@
                 };
             @endphp
 
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
                 @foreach($kpis as $k)
                     @php
                         $active = ($k['key'] === '' && ($curEstado === '' || $curEstado === null))
@@ -179,6 +180,7 @@
                                         'RESERVADO'  => 'bg-amber-50 text-amber-700 border-amber-200',
                                         'REPARACION', 'REPARACIÓN' => 'bg-blue-50 text-blue-700 border-blue-200',
                                         'VENDIDO'    => 'bg-slate-100 text-slate-700 border-slate-200',
+                                        'DEVUELTO'   => 'bg-indigo-50 text-indigo-700 border-indigo-200',
                                         'BAJA'       => 'bg-rose-50 text-rose-700 border-rose-200',
                                         default      => 'bg-gray-50 text-gray-700 border-gray-200',
                                     };

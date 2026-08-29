@@ -20,6 +20,7 @@ class DashboardController extends Controller
                 count(*) filter (where estado='RESERVADO') as reservado,
                 count(*) filter (where estado='REPARACION') as reparacion,
                 count(*) filter (where estado='VENDIDO') as vendido,
+                count(*) filter (where estado='DEVUELTO') as devuelto,
                 count(*) filter (where estado='BAJA') as baja
             ")
             ->first();
