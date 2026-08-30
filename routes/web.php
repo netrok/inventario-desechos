@@ -9,6 +9,7 @@ use App\Http\Controllers\PosController;
 use App\Http\Controllers\PostventaController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RevisionDevolucionController;
 use App\Http\Controllers\UbicacionController;
 use App\Http\Controllers\VentaController;
 use Illuminate\Support\Facades\Route;
@@ -162,6 +163,16 @@ Route::middleware(['auth'])->group(function () {
     Route::post('items/{id}/mover', [ItemController::class, 'moveUbicacion'])
         ->name('items.moveUbicacion')
         ->middleware('permission:items.mover');
+
+    // Revisión formal de artículos devueltos (B13): permiso dedicado,
+    // nunca vía items.cambiar_estado. La devolución concreta se revisa una vez.
+    Route::get('items/revision/{detalle}', [RevisionDevolucionController::class, 'create'])
+        ->name('items.revision')
+        ->middleware('permission:items.revisar_devolucion');
+
+    Route::post('items/revision/{detalle}', [RevisionDevolucionController::class, 'store'])
+        ->name('items.revision.store')
+        ->middleware('permission:items.revisar_devolucion');
 
     // CRUD principal
     Route::get('items', [ItemController::class, 'index'])->name('items.index')->middleware('permission:items.ver');

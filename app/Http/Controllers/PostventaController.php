@@ -95,7 +95,8 @@ class PostventaController extends Controller
         }
 
         return redirect()->route('postventa.show', $documento)
-            ->with('success', "Devolución registrada (documento {$documento->folio}).");
+            ->with('success', "Devolución registrada (documento {$documento->folio}). Los artículos recibidos quedan pendientes de revisión antes de poder volver a venderse.")
+            ->with('pendientesRevision', true);
     }
 
     /**

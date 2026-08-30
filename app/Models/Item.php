@@ -69,9 +69,10 @@ class Item extends Model
      *   - CANCELACIÓN atómica: VENDIDO -> DISPONIBLE
      *   - DEVOLUCIÓN atómica:  VENDIDO -> DEVUELTO
      *
-     * DEVUELTO es un estado transitorio que sí admite salida por el flujo
-     * normal autorizado de cambio de estado (recepción/revisión del equipo):
-     * DEVUELTO -> DISPONIBLE | REPARACION | BAJA.
+     * DEVUELTO es un estado transitorio que NO admite salida manual (B13):
+     * la única vía de salida es la revisión formal (RevisionDevolucionService),
+     * que deriva el artículo a DISPONIBLE | REPARACION | BAJA como RESULTADO de
+     * la revisión físico-administrativa de la devolución concreta.
      */
     public static function canTransition(string $from, string $to): bool
     {
@@ -80,7 +81,7 @@ class Item extends Model
             'RESERVADO' => ['DISPONIBLE', 'BAJA'],
             'REPARACION' => ['DISPONIBLE', 'BAJA'],
             'VENDIDO' => [],
-            'DEVUELTO' => ['DISPONIBLE', 'REPARACION', 'BAJA'],
+            'DEVUELTO' => [],
             'BAJA' => [],
         ];
 
@@ -100,6 +101,16 @@ class Item extends Model
     public function movimientos(): HasMany
     {
         return $this->hasMany(Movimiento::class, 'item_id');
+    }
+
+    public function revisiones(): HasMany
+    {
+        return $this->hasMany(RevisionDevolucion::class, 'item_id');
+    }
+
+    public function documentosPostventaDetalle(): HasMany
+    {
+        return $this->hasMany(DocumentoPostventaDetalle::class, 'item_id');
     }
 
     public function getFotoUrlAttribute(): string

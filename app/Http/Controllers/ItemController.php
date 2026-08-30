@@ -6,6 +6,7 @@ use App\Exports\ItemsExport;
 use App\Http\Requests\StoreItemRequest;
 use App\Http\Requests\UpdateItemRequest;
 use App\Models\Categoria;
+use App\Models\DocumentoPostventaDetalle;
 use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Ubicacion;
@@ -141,6 +142,14 @@ class ItemController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        // B13: devoluciones pendientes de revisión de los items de esta página,
+        // para ofrecer el botón "Revisar" solo cuando corresponda (sin N+1).
+        $devueltosPendientes = DocumentoPostventaDetalle::query()
+            ->whereIn('item_id', $items->pluck('id')->whereNotNull())
+            ->whereDoesntHave('revision')
+            ->get()
+            ->keyBy('item_id');
+
         return view('items.index', [
             'items' => $items,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
@@ -148,6 +157,7 @@ class ItemController extends Controller
             'estados' => Item::ESTADOS,
             'filters' => $filters,
             'stats' => $stats,
+            'devueltosPendientes' => $devueltosPendientes,
         ]);
     }
 
@@ -217,9 +227,17 @@ class ItemController extends Controller
             'movimientos.aUbicacion',
         ]);
 
+        // B13: devolución concreta pendiente de revisión (para el botón "Revisar").
+        $pendienteRevision = DocumentoPostventaDetalle::query()
+            ->where('item_id', $item->id)
+            ->whereDoesntHave('revision')
+            ->orderByDesc('id')
+            ->first();
+
         return view('items.show', [
             'item' => $item,
             'ubicaciones' => Ubicacion::orderBy('nombre')->get(),
+            'pendienteRevision' => $pendienteRevision,
         ]);
     }
 
@@ -398,6 +416,14 @@ class ItemController extends Controller
 
                 if ($from === $to) {
                     return false;
+                }
+
+                // B13: DEVUELTO es un estado transitorio cuya única salida es la
+                // revisión formal de la devolución (RevisionDevolucionService).
+                if ($from === 'DEVUELTO' && in_array($to, ['DISPONIBLE', 'REPARACION', 'BAJA'], true)) {
+                    throw ValidationException::withMessages([
+                        'estado' => 'Los artículos devueltos deben pasar por una revisión antes de cambiar de estado.',
+                    ]);
                 }
 
                 if (! Item::canTransition($from, $to)) {

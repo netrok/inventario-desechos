@@ -5,6 +5,7 @@ use App\Models\DocumentoPostventa;
 use App\Models\DocumentoPostventaDetalle;
 use App\Models\Item;
 use App\Models\Movimiento;
+use App\Models\RevisionDevolucion;
 use App\Models\User;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
@@ -25,6 +26,7 @@ beforeEach(function () {
         'ventas.devolver',
         'items.ver',
         'items.cambiar_estado',
+        'items.revisar_devolucion',
     ] as $permission) {
         Permission::findOrCreate($permission, 'web');
     }
@@ -55,6 +57,7 @@ function reventaAdmin(): User
         'ventas.devolver',
         'items.ver',
         'items.cambiar_estado',
+        'items.revisar_devolucion',
     ]);
 
     return $user;
@@ -241,7 +244,7 @@ it('serializa la reventa por estado+lock (emulación secuencial; sin concurrenci
     expect(VentaDetalle::query()->where('item_id', $item->id)->count())->toBe(1);
 });
 
-it('permite revender tras devolución y reingreso autorizado DEVUELTO->DISPONIBLE', function () {
+it('permite revender tras devolución y revisión formal DEVUELTO->DISPONIBLE', function () {
     $admin = reventaAdmin();
     $item = reventaItem(900.0);
 
@@ -263,15 +266,27 @@ it('permite revender tras devolución y reingreso autorizado DEVUELTO->DISPONIBL
     expect($item->fresh()->estado)->toBe('DEVUELTO');
     expect($venta1->fresh()->estado)->toBe(Venta::ESTADO_DEVUELTA);
 
-    // Reingreso autorizado (cambio de estado): DEVUELTO -> DISPONIBLE.
+    // El cambio genérico ya NO autoriza DEVUELTO -> DISPONIBLE (B13).
     $this->actingAs($admin)
         ->post(route('items.changeEstado', $item->id), [
             'estado' => 'DISPONIBLE',
-            'notas' => 'Reingreso tras devolución.',
+            'notas' => 'Intento de reingreso directo.',
+        ])
+        ->assertSessionHasErrors('estado');
+    expect($item->fresh()->estado)->toBe('DEVUELTO');
+
+    // Reingreso autorizado vía la revisión formal de la devolución concreta.
+    $revisionDetalle = DocumentoPostventaDetalle::query()->where('item_id', $item->id)->firstOrFail();
+
+    $this->actingAs($admin)
+        ->post(route('items.revision.store', $revisionDetalle), [
+            'resultado' => 'DISPONIBLE',
+            'observaciones' => 'Equipo verificado y listo.',
         ])
         ->assertSessionHasNoErrors();
 
     expect($item->fresh()->estado)->toBe('DISPONIBLE');
+    expect(RevisionDevolucion::query()->where('item_id', $item->id)->count())->toBe(1);
 
     // Reventa: Venta 2
     reventaSession($item);

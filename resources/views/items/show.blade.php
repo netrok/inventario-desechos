@@ -70,6 +70,13 @@
                             Editar
                         </a>
                     @endcan
+
+                    @if($item->estado === 'DEVUELTO' && $pendienteRevision && auth()->user()->can('items.revisar_devolucion'))
+                        <a href="{{ route('items.revision', $pendienteRevision) }}"
+                           class="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                            Revisar artículo
+                        </a>
+                    @endif
                 </div>
             </div>
 
@@ -263,6 +270,19 @@
                         </div>
 
                         <div class="p-6 space-y-4">
+                            @if($item->estado === 'DEVUELTO' && $pendienteRevision && auth()->user()->can('items.revisar_devolucion'))
+                                <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                                    <div class="text-sm font-semibold text-indigo-900">Artículo devuelto</div>
+                                    <p class="mt-1 text-xs text-indigo-800">
+                                        Su salida de DEVUELTO requiere una revisión formal (DISPONIBLE, REPARACION o BAJA).
+                                    </p>
+                                    <a href="{{ route('items.revision', $pendienteRevision) }}"
+                                       class="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                                        Revisar artículo
+                                    </a>
+                                </div>
+                            @endif
+
                             {{-- Cambiar estado --}}
                             @can('items.cambiar_estado')
                                 <form method="POST"
@@ -280,6 +300,7 @@
                                     <p class="text-xs text-gray-500">
                                         BAJA retira el equipo de operación; el registro se conserva para trazabilidad.
                                         VENDIDO y DEVUELTO se originan únicamente desde el POS/postventa.
+                                        Los devueltos se reincorporan solo vía su revisión formal.
                                     </p>
 
                                     <input name="notas" placeholder="Notas (opcional)"

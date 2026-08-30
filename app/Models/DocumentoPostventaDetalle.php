@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DocumentoPostventaDetalle extends Model
 {
@@ -35,5 +36,14 @@ class DocumentoPostventaDetalle extends Model
     {
         // Misma salvaguarda que VentaDetalle: consulta histórica resiliente.
         return $this->belongsTo(Item::class, 'item_id')->withTrashed();
+    }
+
+    /**
+     * Revisión formal asociada a esta devolución concreta (B13).
+     * A lo sumo una: la tabla lo garantiza con documento_postventa_detalle_id UNIQUE.
+     */
+    public function revision(): HasOne
+    {
+        return $this->hasOne(RevisionDevolucion::class, 'documento_postventa_detalle_id');
     }
 }

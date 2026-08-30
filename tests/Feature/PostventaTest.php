@@ -634,18 +634,17 @@ it('el estado DEVUELTO no es vendible en el POS', function () {
     expect(session('pos.cart'))->toBeNull();
 });
 
-it('DEVUELTO no admite transiciones manuales hacia VENDIDO ni hacia estado inexistente', function () {
+it('DEVUELTO no admite transiciones manuales (B13: solo revisión formal)', function () {
     expect(Item::canTransition('DEVUELTO', 'VENDIDO'))->toBeFalse();
     expect(Item::canTransition('DEVUELTO', 'RESERVADO'))->toBeFalse();
+    expect(Item::canTransition('DEVUELTO', 'DISPONIBLE'))->toBeFalse();
+    expect(Item::canTransition('DEVUELTO', 'REPARACION'))->toBeFalse();
+    expect(Item::canTransition('DEVUELTO', 'BAJA'))->toBeFalse();
     expect(Item::canTransition('VENDIDO', 'DISPONIBLE'))->toBeFalse();
     expect(Item::canTransition('VENDIDO', 'DEVUELTO'))->toBeFalse();
-
-    expect(Item::canTransition('DEVUELTO', 'DISPONIBLE'))->toBeTrue();
-    expect(Item::canTransition('DEVUELTO', 'REPARACION'))->toBeTrue();
-    expect(Item::canTransition('DEVUELTO', 'BAJA'))->toBeTrue();
 });
 
-it('el endpoint de cambio de estado manual prohíbe VENDIDO y DEVUELTO como destino', function () {
+it('el endpoint de cambio de estado manual prohíbe VENDIDO como destino y todo cambio desde DEVUELTO', function () {
     $admin = postventaAdmin();
     $admin->givePermissionTo('items.cambiar_estado');
 
@@ -660,12 +659,12 @@ it('el endpoint de cambio de estado manual prohíbe VENDIDO y DEVUELTO como dest
         ->post(route('items.changeEstado', $devuelto->id), ['estado' => 'VENDIDO'])
         ->assertSessionHasErrors('estado');
 
-    // La salida natural de DEVUELTO (recepción del equipo) sigue operativa.
+    // B13: toda salida de DEVUELTO (incluida la recepción) pasa por revisión formal.
     $this->actingAs($admin)
         ->post(route('items.changeEstado', $devuelto->id), ['estado' => 'REPARACION'])
-        ->assertSessionHas('success');
+        ->assertSessionHasErrors('estado');
 
-    expect($devuelto->refresh()->estado)->toBe('REPARACION');
+    expect($devuelto->refresh()->estado)->toBe('DEVUELTO');
 });
 
 /**

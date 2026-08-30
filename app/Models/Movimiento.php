@@ -25,6 +25,8 @@ class Movimiento extends Model
 
     public const TIPO_RESTAURAR = 'RESTAURAR';
 
+    public const TIPO_REVISION_DEVOLUCION = 'REVISION_DEVOLUCION';
+
     protected $fillable = [
         'item_id',
         'user_id',
