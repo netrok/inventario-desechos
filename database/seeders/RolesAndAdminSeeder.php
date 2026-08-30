@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Caja;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -93,6 +94,18 @@ class RolesAndAdminSeeder extends Seeder
             // Configuración general
             'configuracion.ver',
             'configuracion.editar',
+
+            // Caja / cortes (B14)
+            'cajas.ver',
+            'cajas.configurar',
+            'cajas.abrir',
+            'cajas.operar',
+            'cajas.movimientos',
+            'cajas.cerrar',
+            'cajas.ver_todas',
+            'cajas.ajustar',
+            'cajas.entrada',
+            'cajas.retiro',
         ];
 
         foreach ($perms as $p) {
@@ -125,6 +138,10 @@ class RolesAndAdminSeeder extends Seeder
         // La cancelación es una reversa financiera total reservada a Admin.
         // Clientes: puede ver/crear/editar (para POS necesita clientes), pero
         // NO desactivar (acción de control reservada a Admin).
+        // Caja (B14, matriz SEGURA): opera su propia sesión (abrir, ver
+        // movimientos, cerrar) sin gestionar cajas físicas ni ver historial
+        // global, y SIN libertad de registrar entradas/retiros/ajustes de
+        // efectivo (reservados a Admin vía cajas.entrada/cajas.retiro/cajas.ajustar).
         $ventasPermisos = [
             'dashboard.ver',
             'items.ver',
@@ -134,9 +151,16 @@ class RolesAndAdminSeeder extends Seeder
             'clientes.ver',
             'clientes.crear',
             'clientes.editar',
+            'cajas.ver',
+            'cajas.abrir',
+            'cajas.operar',
+            'cajas.movimientos',
+            'cajas.cerrar',
         ];
 
         // Auditor (solo lectura) + consulta de configuración y clientes.
+        // Caja (B14): consulta su historial y el global (ver_todas) con acceso
+        // de SOLO lectura; jamás abre/opera/cierra.
         $auditorPermisos = [
             'dashboard.ver',
             'items.ver',
@@ -146,6 +170,8 @@ class RolesAndAdminSeeder extends Seeder
             'ventas.ver',
             'clientes.ver',
             'configuracion.ver',
+            'cajas.ver',
+            'cajas.ver_todas',
         ];
 
         // Guard server-side: la Configuración General solo puede editarla Admin.
@@ -166,6 +192,26 @@ class RolesAndAdminSeeder extends Seeder
         $ventasRole->syncPermissions($ventasPermisos);
 
         $auditorRole->syncPermissions($auditorPermisos);
+
+        /**
+         * Caja física principal (idempotente por CÓDIGO, B14).
+         *
+         * La identidad ESTABLE de la caja es su código (CAJ-000001), no el
+         * nombre visible. Si el usuario renombra "Caja Principal" en el futuro,
+         * re-ejecutar el seeder NO debe crear una caja nueva: solo se crea
+         * cuando no existe una caja con ese código y aún no hay ninguna en el
+         * sistema (la primera creación obtiene CAJ-000001 por secuencia).
+         */
+        $cajaPrincipalExiste = Caja::query()->where('codigo', 'CAJ-000001')->exists();
+
+        if (! $cajaPrincipalExiste && Caja::query()->count() === 0) {
+            Caja::create([
+                'codigo' => 'CAJ-000001',
+                'nombre' => 'Caja Principal',
+                'activa' => true,
+                'descripcion' => 'Caja principal del establecimiento.',
+            ]);
+        }
 
         /**
          * Usuario Admin inicial.

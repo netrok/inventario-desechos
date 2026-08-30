@@ -49,6 +49,38 @@
                 @endforeach
             </div>
 
+            {{-- B14: estado de caja del operador --}}
+            @if(auth()->user()->can('cajas.ver'))
+                @if($cajaSesion instanceof \App\Models\SesionCaja)
+                    <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 shadow-sm p-5">
+                        <div class="flex items-center justify-between gap-4 flex-wrap">
+                            <div>
+                                <div class="text-xs font-medium text-emerald-700">Sesión de caja abierta</div>
+                                <div class="mt-1 text-sm text-emerald-900">
+                                    <span class="font-semibold">{{ $cajaSesion->folio }}</span>
+                                    <span class="text-emerald-700/70">•</span>
+                                    {{ $cajaSesion->caja?->nombre }}
+                                    <span class="text-emerald-700/70">•</span>
+                                    Fondo {{ $cajaSesion->fondo_inicial }}
+                                </div>
+                            </div>
+                            @if(auth()->user()->can('cajas.movimientos'))
+                                <a href="{{ route('cajas.movimientos', $cajaSesion) }}"
+                                   class="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800">
+                                    Ver sesión
+                                </a>
+                            @endif
+                        </div>
+                    </div>
+                @elseif(auth()->user()->can('cajas.abrir'))
+                    <a href="{{ route('cajas.abrir') }}"
+                       class="mt-4 block rounded-2xl border border-gray-200 bg-white shadow-sm p-5 hover:border-gray-300 hover:shadow">
+                        <div class="text-xs font-medium text-gray-500">Caja cerrada</div>
+                        <div class="mt-1 text-sm font-medium text-gray-900">Abrir una sesión de caja para registrar ventas →</div>
+                    </a>
+                @endif
+            @endif
+
             <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {{-- Top ubicaciones --}}

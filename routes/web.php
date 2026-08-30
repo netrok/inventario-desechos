@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConfiguracionController;
@@ -266,6 +267,55 @@ Route::middleware(['auth'])->group(function () {
     Route::get('postventa/{documento}/print', [PostventaController::class, 'print'])
         ->name('postventa.print')
         ->middleware('permission:ventas.ver');
+
+    /**
+     * =========================
+     * Caja (B14): sesiones, movimientos, arqueo y corte
+     * =========================
+     */
+    Route::get('cajas', [CajaController::class, 'index'])
+        ->name('cajas.index')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/abrir', [CajaController::class, 'abrir'])
+        ->name('cajas.abrir')
+        ->middleware('permission:cajas.abrir');
+
+    Route::post('cajas/abrir', [CajaController::class, 'abrirSesion'])
+        ->name('cajas.abrir.store')
+        ->middleware('permission:cajas.abrir');
+
+    Route::get('cajas/sesiones/{sesion}', [CajaController::class, 'movimientos'])
+        ->name('cajas.movimientos')
+        ->middleware('permission:cajas.movimientos');
+
+    Route::post('cajas/sesiones/{sesion}/ajuste', [CajaController::class, 'ajuste'])
+        ->name('cajas.ajuste')
+        ->middleware('permission:cajas.ajustar');
+
+    Route::post('cajas/sesiones/{sesion}/entrada', [CajaController::class, 'entrada'])
+        ->name('cajas.entrada')
+        ->middleware('permission:cajas.entrada');
+
+    Route::post('cajas/sesiones/{sesion}/retiro', [CajaController::class, 'retiro'])
+        ->name('cajas.retiro')
+        ->middleware('permission:cajas.retiro');
+
+    Route::get('cajas/sesiones/{sesion}/pdf', [CajaController::class, 'cortePdf'])
+        ->name('cajas.corte.pdf')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/sesiones/{sesion}/xlsx', [CajaController::class, 'corteXlsx'])
+        ->name('cajas.corte.xlsx')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/sesiones/{sesion}/cerrar', [CajaController::class, 'cerrar'])
+        ->name('cajas.cerrar')
+        ->middleware('permission:cajas.cerrar');
+
+    Route::post('cajas/sesiones/{sesion}/cerrar', [CajaController::class, 'cerrarSesion'])
+        ->name('cajas.cerrar.store')
+        ->middleware('permission:cajas.cerrar');
 
     /**
      * =========================

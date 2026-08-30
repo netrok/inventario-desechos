@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DocumentoPostventa;
+use App\Models\PagoVenta;
 use App\Models\Venta;
 use App\Services\PostventaService;
 use DomainException;
@@ -17,17 +18,38 @@ class PostventaController extends Controller
     ) {}
 
     /**
+     * Deriva la forma de reembolso sugerida desde los pagos reales de la venta:
+     * método único si solo hubo uno; MIXTO o legacy sin pagos → EFECTIVO.
+     */
+    private function formaReembolsoSugerida(Venta $venta): string
+    {
+        $metodos = $venta->pagos->pluck('metodo')->unique()->values();
+
+        if ($metodos->count() === 1 && in_array($metodos->first(), PagoVenta::METODOS, true)) {
+            return $metodos->first();
+        }
+
+        return DocumentoPostventa::FORMA_EFECTIVO;
+    }
+
+    /**
      * Formulario de cancelación (por permiso ventas.cancelar).
      */
     public function cancelarForm(Venta $venta)
     {
         abort_unless($venta->esElegibleParaCancelacion(), 409, 'Esta venta no puede cancelarse.');
 
-        $venta->load(['user', 'detalles.item', 'detalles.item.categoria']);
+        $venta->load(['user', 'detalles.item', 'detalles.item.categoria', 'pagos']);
+
+        // Sugerencia de reembolso: el mismo método único de pago si existía; si
+        // la venta fue mixta o legacy, se sugiere EFECTIVO.
+        $sugerido = $this->formaReembolsoSugerida($venta);
 
         return view('postventa.cancelar', [
             'venta' => $venta,
             'totalFormateado' => \App\Support\Money::formatear((string) $venta->total),
+            'formasReembolso' => DocumentoPostventa::FORMAS_REEMBOLSO,
+            'sugerido' => $sugerido,
         ]);
     }
 
@@ -38,10 +60,11 @@ class PostventaController extends Controller
     {
         $data = $request->validate([
             'motivo' => ['required', 'string', 'min:5', 'max:2000'],
+            'forma_reembolso' => ['required', Rule::in(DocumentoPostventa::FORMAS_REEMBOLSO)],
         ]);
 
         try {
-            $documento = $this->service->cancelar($venta, $data['motivo']);
+            $documento = $this->service->cancelar($venta, $data['motivo'], $data['forma_reembolso']);
         } catch (DomainException $e) {
             throw ValidationException::withMessages(['motivo' => $e->getMessage()]);
         }

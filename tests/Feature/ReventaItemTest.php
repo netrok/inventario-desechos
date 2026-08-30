@@ -84,12 +84,16 @@ function reventaSession(Item $item, ?Cliente $cliente = null): void
 function venderDesdePos(User $user, Item $item, string $formaPago = 'EFECTIVO'): Venta
 {
     reventaSession($item);
+    openCajaFor($user);
+
+    $pagos = $formaPago === 'EFECTIVO'
+        ? pagosEfectivo((float) $item->precio)
+        : pagosMetodo((float) $item->precio, $formaPago, 'REF-REVENTA');
 
     test()->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => $formaPago,
-        ])
+        ], $pagos))
         ->assertSessionHasNoErrors();
 
     return Venta::query()->orderByDesc('id')->first();
@@ -113,6 +117,7 @@ it('permite revender el mismo item tras cancelar la primera venta', function () 
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta1), [
             'motivo' => 'Cancelación de prueba para reventa.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasNoErrors();
 
@@ -206,10 +211,9 @@ it('un item en una venta activa (VENDIDO) no puede revenderse', function () {
     // Segundo intento sobre el MISMO item todavía VENDIDO.
     reventaSession($item);
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(1200.0)))
         ->assertSessionHasErrors('items');
 
     $this->assertDatabaseCount('ventas', 1);
@@ -233,10 +237,9 @@ it('serializa la reventa por estado+lock (emulación secuencial; sin concurrenci
     // el estado ya NO es DISPONIBLE -> error controlado, sin filas nuevas.
     reventaSession($item);
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(800.0)))
         ->assertSessionHasErrors('items');
 
     $this->assertDatabaseCount('ventas', 1);
@@ -291,10 +294,9 @@ it('permite revender tras devolución y revisión formal DEVUELTO->DISPONIBLE', 
     // Reventa: Venta 2
     reventaSession($item);
     $this->actingAs($admin)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => 'TRANSFERENCIA',
-        ])
+        ], pagosMetodo(900.0, 'TRANSFERENCIA', 'REF-2')))
         ->assertSessionHasNoErrors();
 
     expect(Venta::count())->toBe(2);
@@ -312,6 +314,7 @@ it('cancelar la Venta 2 afecta solo su VentaDetalle y deja separadas las postven
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta1), [
             'motivo' => 'Primera cancelación (histórica).',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasNoErrors();
 
@@ -321,6 +324,7 @@ it('cancelar la Venta 2 afecta solo su VentaDetalle y deja separadas las postven
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta1->fresh()), [
             'motivo' => 'Intento inválido sobre la venta cancelada.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasErrors('motivo');
 
@@ -328,6 +332,7 @@ it('cancelar la Venta 2 afecta solo su VentaDetalle y deja separadas las postven
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta2), [
             'motivo' => 'Cancelación de la venta nueva.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasNoErrors();
 
@@ -358,6 +363,7 @@ it('el ticket de la Venta 1 sigue siendo histórico tras la Venta 2 con otro pre
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta1), [
             'motivo' => 'Cancelación para reventa.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasNoErrors();
 
@@ -390,6 +396,7 @@ it('un intento fallido de reventa hace rollback completo sin dejar nada parcial'
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta1), [
             'motivo' => 'Cancelación para preparar reventa.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasNoErrors();
 
@@ -404,10 +411,9 @@ it('un intento fallido de reventa hace rollback completo sin dejar nada parcial'
 
     reventaSession($item);
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(1100.0)))
         ->assertStatus(500);
 
     // Rollback completo: nada de la Venta 2 quedó escrito.

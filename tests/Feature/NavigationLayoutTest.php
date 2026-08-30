@@ -22,6 +22,7 @@ beforeEach(function () {
         'ubicaciones.ver',
         'usuarios.ver',
         'configuracion.ver',
+        'cajas.ver',
     ] as $permission) {
         Permission::findOrCreate($permission, 'web');
     }
@@ -44,6 +45,7 @@ function navLayoutUser(): User
         'ubicaciones.ver',
         'usuarios.ver',
         'configuracion.ver',
+        'cajas.ver',
     ]);
 
     return $user;
@@ -65,6 +67,7 @@ it('la navbar desktop usa etiquetas cortas en una sola línea', function () {
         ->assertSee('Ubicaciones')
         ->assertSee('Usuarios')
         ->assertSee('Configuración')
+        ->assertSee('Caja')
         ->assertDontSee('Punto de venta')
         ->assertDontSee('Admin / Usuarios');
 });
@@ -74,7 +77,8 @@ it('el menú móvil conserva las etiquetas y el punto de venta', function () {
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSee('POS', false)
-        ->assertSee('Usuarios');
+        ->assertSee('Usuarios')
+        ->assertSee('Caja');
 });
 
 it('el POS conserva el selector de clientes vía @stack("scripts")', function () {

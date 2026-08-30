@@ -74,6 +74,7 @@ function integEscenario(float $precio = 150.0): array
 
     // La devolución es un acto transaccional del usuario autenticado.
     test()->actingAs($vendedor);
+    openCajaFor($vendedor);
 
     $doc = app(\App\Services\PostventaService::class)->devolver(
         $venta,
@@ -253,6 +254,7 @@ it('al registrar una devolución el sistema avisa de artículos pendientes de re
     $item->update(['estado' => 'VENDIDO']);
 
     $user = integRevisionista();
+    openCajaFor($user);
 
     $this->actingAs($user)
         ->post(route('ventas.devolver.store', $venta), [
@@ -538,5 +540,5 @@ it('items.revisar_devolucion se asigna a Admin y Almacen pero no a Ventas/Audito
         expect(Role::findByName($rol, 'web')->hasPermissionTo('items.revisar_devolucion'))->toBeFalse();
     }
 
-    expect(Permission::count())->toBe(30);
+    expect(Permission::count())->toBe(40);
 });

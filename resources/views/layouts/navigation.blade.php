@@ -49,6 +49,13 @@
                         </a>
                     @endcan
 
+                    @can('cajas.ver')
+                        <a href="{{ route('cajas.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('cajas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Caja
+                        </a>
+                    @endcan
+
                     @can('clientes.ver')
                         <a href="{{ route('clientes.index') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('clientes.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
@@ -195,6 +202,13 @@
                 <a href="{{ route('ventas.index') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('ventas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Ventas
+                </a>
+            @endcan
+
+            @can('cajas.ver')
+                <a href="{{ route('cajas.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('cajas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Caja
                 </a>
             @endcan
 

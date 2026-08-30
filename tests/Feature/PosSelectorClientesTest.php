@@ -169,8 +169,13 @@ it('el checkout exitoso limpia carrito y cliente seleccionado', function () {
     $item = posClienteItem();
     $this->session(['pos.cliente_id' => $cliente->id, 'pos.cart' => [$item->id]]);
 
-    $this->actingAs(posClienteUser())
-        ->post(route('pos.checkout'), ['items' => [$item->id], 'forma_pago' => 'EFECTIVO'])
+    $user = posClienteUser();
+    openCajaFor($user);
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), array_merge([
+            'items' => [$item->id],
+        ], pagosEfectivo(100.0)))
         ->assertRedirect();
 
     expect(session('pos.cliente_id'))->toBeNull();
@@ -188,8 +193,13 @@ it('el checkout usa el cliente seleccionado correcto', function () {
     $item = posClienteItem();
     $this->session(['pos.cliente_id' => $b->id, 'pos.cart' => [$item->id]]);
 
-    $this->actingAs(posClienteUser())
-        ->post(route('pos.checkout'), ['items' => [$item->id], 'forma_pago' => 'EFECTIVO']);
+    $user = posClienteUser();
+    openCajaFor($user);
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), array_merge([
+            'items' => [$item->id],
+        ], pagosEfectivo(100.0)));
 
     $this->assertDatabaseCount('ventas', 1);
     expect(Venta::first()->cliente_id)->toBe($b->id);

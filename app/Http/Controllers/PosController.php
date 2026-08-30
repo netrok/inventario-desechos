@@ -6,8 +6,11 @@ use App\Models\Cliente;
 use App\Models\Configuracion;
 use App\Models\Item;
 use App\Models\Movimiento;
+use App\Models\PagoVenta;
+use App\Models\SesionCaja;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
+use App\Services\CajaService;
 use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -108,8 +111,9 @@ class PosController extends Controller
         return view('pos.index', [
             'items' => $items->values(),
             'total' => Money::aPrecio($totalCentavos),
-            'formasPago' => Venta::FORMAS_PAGO,
+            'metodosPago' => PagoVenta::METODOS,
             'cliente' => $this->clienteSeleccionado(),
+            'sesionCaja' => app(CajaService::class)->sesionAbiertaDe(Auth::user()),
         ]);
     }
 
@@ -208,24 +212,32 @@ class PosController extends Controller
     }
 
     /**
-     * Confirmación de venta atómica.
+     * Confirmación de venta atómica (B14).
      *
-     * - Total y precio SIEMPRE se calculan en el servidor desde la BD.
-     * - Cliente REQUERIDO: se revalida bajo lock dentro de la transacción.
-     * - Orden de locks determinista para evitar deadlocks:
-     *     1) Cliente (lockForUpdate)
-     *     2) Items ordenados por id (lockForUpdate)
-     *   El postventa bloquea Venta->Detalle->Item; como aquí Venta recién se
-     *   INSERTA (no se bloquea fila previa) no hay ciclo de deadlock.
-     * - El snapshot del cliente se copia server-side desde el Cliente bloqueado.
+     * - Requiere una sesión de caja ABIERTA del usuario operador. Si no la hay
+     *   la venta NO se crea (error controlado, el carrito se conserva).
+     * - Total, precios y pagos SIEMPRE se calculan/revalidan en el servidor.
+     * - Los pagos deben cubrir exactamente el total (sin crédito habilitado);
+     *   el efectivo recibido/cambio se revalidan server-side.
+     * - Orden de locks determinista:
+     *     1) Sesión de caja (lockForUpdate + revalidación ABIERTA)
+     *     2) Cliente (lockForUpdate)
+     *     3) Items ordenados por id (lockForUpdate)
+     *   Postventa bloquea Venta->Detalle->Item (mismo orden de sesión primero
+     *   cuando hay reembolso en efectivo), sin ciclos de deadlock.
+     * - ventas.forma_pago se DERIVA de los pagos (único método, o MIXTO).
      */
     public function checkout(Request $request)
     {
         $data = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*' => ['required', 'integer', 'distinct'],
-            'forma_pago' => ['required', Rule::in(Venta::FORMAS_PAGO)],
             'notas' => ['nullable', 'string', 'max:1000'],
+            'pagos' => ['required', 'array', 'min:1'],
+            'pagos.*.metodo' => ['required', Rule::in(PagoVenta::METODOS)],
+            'pagos.*.monto_aplicado' => ['required', 'numeric', 'min:0.01'],
+            'pagos.*.efectivo_recibido' => ['nullable', 'numeric', 'min:0'],
+            'pagos.*.referencia' => ['nullable', 'string', 'max:100'],
         ]);
 
         $clienteId = (int) session(self::CLIENTE_KEY, 0);
@@ -254,10 +266,35 @@ class PosController extends Controller
             ]);
         }
 
+        // Requisito B14: sesión de caja abierta. Revisión temprana (UX
+        // controlada); se revalida y bloquea dentro de la transacción.
+        $esionPreliminar = app(CajaService::class)->sesionAbiertaDe(Auth::user());
+
+        if (! $esionPreliminar instanceof SesionCaja) {
+            throw ValidationException::withMessages([
+                'caja' => 'Debes abrir una caja antes de registrar ventas.',
+            ]);
+        }
+
         $ids = $this->cartIds();
 
         $venta = DB::transaction(function () use ($ids, $data, $clienteId) {
-            // Lock 1: Cliente. Debe existir y estar ACTIVO en el momento de la venta.
+            // Lock 1: Sesión de caja. Revalidada ABIERTA bajo lock para impedir
+            // ventas concurrentes entrando mientras se cierra la caja.
+            $sesion = SesionCaja::query()
+                ->lockForUpdate()
+                ->where('user_id_apertura', Auth::id())
+                ->abiertas()
+                ->with('caja')
+                ->first();
+
+            if (! $sesion instanceof SesionCaja) {
+                throw ValidationException::withMessages([
+                    'caja' => 'Debes abrir una caja antes de registrar ventas.',
+                ]);
+            }
+
+            // Lock 2: Cliente. Debe existir y estar ACTIVO en el momento de la venta.
             $cliente = Cliente::query()->lockForUpdate()->find($clienteId);
 
             if (! $cliente instanceof Cliente) {
@@ -272,7 +309,7 @@ class PosController extends Controller
                 ]);
             }
 
-            // Lock 2: Items ordenados por id.
+            // Lock 3: Items ordenados por id.
             $items = Item::query()
                 ->whereIn('id', $ids)
                 ->lockForUpdate()
@@ -300,6 +337,44 @@ class PosController extends Controller
                 $totalCentavos += Money::aCentavos($item->precio);
             }
 
+            // Normalización server-side de los pagos a centavos enteros.
+            $pagosCentavos = [];
+
+            foreach ($data['pagos'] as $pago) {
+                $metodo = $pago['metodo'];
+                $montoCentavos = Money::aCentavos($pago['monto_aplicado']);
+
+                $recibidoCentavos = null;
+
+                if ($metodo === PagoVenta::METODO_EFECTIVO) {
+                    if (($pago['efectivo_recibido'] ?? null) === null || trim((string) $pago['efectivo_recibido']) === '') {
+                        throw ValidationException::withMessages([
+                            'pagos' => 'El pago en efectivo requiere el efectivo recibido.',
+                        ]);
+                    }
+
+                    $recibidoCentavos = Money::aCentavos($pago['efectivo_recibido']);
+
+                    if ($recibidoCentavos < $montoCentavos) {
+                        throw ValidationException::withMessages([
+                            'pagos' => 'El efectivo recibido es insuficiente para el monto a aplicar.',
+                        ]);
+                    }
+                }
+
+                $pagosCentavos[] = [
+                    'metodo' => $metodo,
+                    // Se conservan como PESOS (string) para que cobrarVenta los
+                    // renormalice con Money::aCentavos sin duplicar el factor 100.
+                    'monto_aplicado' => Money::aPrecio($montoCentavos),
+                    'efectivo_recibido' => $recibidoCentavos === null ? null : Money::aPrecio($recibidoCentavos),
+                    'referencia' => trim((string) ($pago['referencia'] ?? '')) !== '' ? $pago['referencia'] : null,
+                ];
+            }
+
+            // ventas.forma_pago derivado de los pagos: método único o MIXTO.
+            $metodos = array_values(array_unique(array_column($pagosCentavos, 'metodo')));
+
             // Snapshot del cliente AL MOMENTO de la venta (server-side, desde el
             // Cliente bloqueado). NO se reescribe posteriormente ni al editar el Cliente.
             $venta = Venta::create([
@@ -312,7 +387,7 @@ class PosController extends Controller
                 'cliente_email' => $cliente->email,
                 'cliente_tipo' => $cliente->tipo,
                 'total' => Money::aPrecio($totalCentavos),
-                'forma_pago' => $data['forma_pago'],
+                'forma_pago' => count($metodos) === 1 ? $metodos[0] : 'MIXTO',
                 'notas' => $data['notas'] ?? null,
             ]);
 
@@ -337,6 +412,10 @@ class PosController extends Controller
                     'evidencia_path' => null,
                 ]);
             }
+
+            // Cobro: pagos + movimientos físicos de efectivo. Valida que la
+            // suma cubra exactamente el total (sin crédito en B14).
+            app(CajaService::class)->cobrarVenta($venta, $sesion, Auth::user(), $pagosCentavos, $totalCentavos);
 
             return $venta;
         });

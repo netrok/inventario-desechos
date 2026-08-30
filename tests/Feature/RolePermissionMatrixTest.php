@@ -38,6 +38,8 @@ dataset('matriz_rol_permisos', [
         'ventas.ver',
         'clientes.ver',
         'configuracion.ver',
+        'cajas.ver',
+        'cajas.ver_todas',
     ]],
     'Ventas' => ['Ventas', [
         'dashboard.ver',
@@ -48,6 +50,11 @@ dataset('matriz_rol_permisos', [
         'clientes.ver',
         'clientes.crear',
         'clientes.editar',
+        'cajas.ver',
+        'cajas.abrir',
+        'cajas.operar',
+        'cajas.movimientos',
+        'cajas.cerrar',
     ]],
 ]);
 
@@ -81,11 +88,28 @@ it('el fresh no crea permisos huérfanos de ventas, papelera ni catálogos', fun
     ])->count())->toBe(0);
 });
 
-it('la matriz tiene 30 permisos canónicos y Admin reúne los 30', function () {
-    expect(Permission::count())->toBe(30);
+it('la matriz tiene 40 permisos canónicos y Admin reúne los 40', function () {
+    expect(Permission::count())->toBe(40);
 
     $admin = Role::findByName('Admin', 'web');
-    expect($admin->permissions()->count())->toBe(30);
+    expect($admin->permissions()->count())->toBe(40);
+});
+
+it('la escritura de efectivo (entrada/retiro/ajuste) es exclusiva de Admin; Ventas solo consulta', function () {
+    $admin = Role::findByName('Admin', 'web');
+    $ventas = Role::findByName('Ventas', 'web');
+    $auditor = Role::findByName('Auditor', 'web');
+
+    foreach (['cajas.entrada', 'cajas.retiro', 'cajas.ajustar'] as $permiso) {
+        expect($admin->hasPermissionTo($permiso))->toBeTrue();
+        expect($ventas->hasPermissionTo($permiso))->toBeFalse();
+        expect($auditor->hasPermissionTo($permiso))->toBeFalse();
+    }
+
+    // Ventas conserva consulta de su sesión pero sin escritura de efectivo.
+    expect($ventas->hasPermissionTo('cajas.movimientos'))->toBeTrue();
+    expect($ventas->hasPermissionTo('cajas.ver_todas'))->toBeFalse();
+    expect($auditor->hasPermissionTo('cajas.ver_todas'))->toBeTrue();
 });
 
 it('configuracion.editar está asignado exclusivamente al rol Admin', function () {

@@ -63,6 +63,13 @@
         .totales .label { font-weight: 700; letter-spacing: 0.5px; }
         .totales .monto { font-size: {{ $width === 58 ? '14px' : '17px' }}; font-weight: 800; }
 
+        .pagos { border-bottom: 1px dashed #9ca3af; padding: 4px 0; }
+        .pagos .titulo { font-weight: 700; letter-spacing: 0.5px; }
+        .pagos .row { display: flex; justify-content: space-between; gap: 6px; }
+        .pagos .row .k { color: #374151; }
+        .pagos .row .v { font-weight: 700; }
+        .pagos .cambio { color: #b45309; }
+
         .notas { margin-top: 6px; }
         .notas .k { font-weight: 700; }
 
@@ -144,6 +151,30 @@
                 <span class="label">Total</span>
                 <span class="monto">{{ $totalFormateado }}</span>
             </div>
+
+            @if($venta->pagos->isNotEmpty())
+                <div class="pagos">
+                    <div class="titulo">Pagos</div>
+                    @foreach($venta->pagos as $pago)
+                        <div class="row">
+                            <span class="k">{{ $pago->metodo }}</span>
+                            <span class="v">{{ number_format((float) $pago->monto_aplicado, 2) }}</span>
+                        </div>
+                        @if($pago->efectivo_recibido !== null && $pago->efectivo_recibido > 0)
+                            <div class="row">
+                                <span class="k">&nbsp;&nbsp;Recibido</span>
+                                <span class="v">{{ number_format((float) $pago->efectivo_recibido, 2) }}</span>
+                            </div>
+                        @endif
+                        @if($pago->cambio_entregado !== null && $pago->cambio_entregado > 0)
+                            <div class="row">
+                                <span class="k">&nbsp;&nbsp;Cambio</span>
+                                <span class="v cambio">{{ number_format((float) $pago->cambio_entregado, 2) }}</span>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
 
             @if($venta->notas)
                 <div class="notas">

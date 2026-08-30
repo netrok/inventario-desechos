@@ -20,6 +20,8 @@ class DocumentoPostventa extends Model
         self::TIPO_DEVOLUCION,
     ];
 
+    public const FORMA_EFECTIVO = 'EFECTIVO';
+
     public const FORMAS_REEMBOLSO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'OTRO'];
 
     protected $fillable = [

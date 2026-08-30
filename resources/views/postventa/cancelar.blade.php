@@ -83,6 +83,25 @@
                     <x-input-error :messages="$errors->get('motivo')" class="mt-2" />
                 </div>
 
+                <div>
+                    <x-input-label for="forma_reembolso" value="Forma de reembolso (obligatorio)" />
+                    <select
+                        name="forma_reembolso"
+                        id="forma_reembolso"
+                        required
+                        class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 @error('forma_reembolso') border-rose-300 ring-rose-200 @enderror"
+                    >
+                        @foreach($formasReembolso as $forma)
+                            <option value="{{ $forma }}" @selected(old('forma_reembolso', $sugerido) === $forma)>{{ $forma }}</option>
+                        @endforeach
+                    </select>
+                    <x-input-error :messages="$errors->get('forma_reembolso')" class="mt-2" />
+                    <p class="mt-1 text-xs text-gray-500">
+                        Si eliges <strong>EFECTIVO</strong>, debes tener una sesión de caja abierta: el importe se registra como
+                        reembolso en efectivo del corte.
+                    </p>
+                </div>
+
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <label class="flex items-center gap-2 text-sm text-gray-700">
                         <input type="checkbox" name="confirma" value="1" required class="rounded border-gray-300">

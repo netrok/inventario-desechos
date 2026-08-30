@@ -6,6 +6,7 @@ use App\Models\DocumentoPostventa;
 use App\Models\DocumentoPostventaDetalle;
 use App\Models\Item;
 use App\Models\Movimiento;
+use App\Models\SesionCaja;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Support\Money;
@@ -17,22 +18,28 @@ use Illuminate\Support\Facades\DB;
  * Operaciones postventa atómicas: cancelación total y devolución.
  *
  * TODO dentro de DB::transaction() con locks deterministas:
- *   1) Venta (lockForUpdate)
- *   2) VentaDetalle(s) afectados (lockForUpdate, orden por id)
- *   3) Item(s) afectados (lockForUpdate, orden por id)
+ *   1) [solo reembolso en efectivo] Sesión de caja ABIERTA (lockForUpdate)
+ *   2) Venta (lockForUpdate)
+ *   3) VentaDetalle(s) afectados (lockForUpdate, orden por id)
+ *   4) Item(s) afectados (lockForUpdate, orden por id)
  *
- * Este orden es idéntico en cancelar() y devolver(), lo que evita deadlocks
- * y garantiza que dos operaciones sobre la misma venta/equipos queden
- * serializadas. Todo se revalida DESPUÉS de tomar los locks.
+ * B14: un reembolso en EFECTIVO toca el cajón físico; la sesión se bloquea
+ * PRIMERO (mismo orden global que el POS: sesión → … → items) lo que evita
+ * deadlocks. Si la sesión está cerrada se aborta la operación (el dinero no
+ * puede salir de un cajón cerrado).
  */
 class PostventaService
 {
     /**
      * Cancelación TOTAL de una venta ACTIVA sin devoluciones previas.
+     *
+     * @param  string  $formaReembolso  FORMA_EFECTIVO toca el cajón físico.
      */
-    public function cancelar(Venta $venta, string $motivo): DocumentoPostventa
+    public function cancelar(Venta $venta, string $motivo, string $formaReembolso): DocumentoPostventa
     {
-        return DB::transaction(function () use ($venta, $motivo): DocumentoPostventa {
+        return DB::transaction(function () use ($venta, $motivo, $formaReembolso): DocumentoPostventa {
+            $sesion = $this->sesionParaReembolsoEfectivo($formaReembolso);
+
             $venta = Venta::query()->lockForUpdate()->findOrFail($venta->getKey());
 
             if ($venta->estado !== Venta::ESTADO_ACTIVA) {
@@ -79,7 +86,7 @@ class PostventaService
                 'tipo' => DocumentoPostventa::TIPO_CANCELACION,
                 'user_id' => Auth::id(),
                 'motivo' => trim($motivo),
-                'forma_reembolso' => null,
+                'forma_reembolso' => $formaReembolso,
                 'total' => Money::aPrecio($totalCentavos),
             ]);
 
@@ -112,6 +119,8 @@ class PostventaService
 
             $venta->update(['estado' => Venta::ESTADO_CANCELADA]);
 
+            $this->reembolsarSiEfectivo($sesion, $documento, $venta, $totalCentavos, DocumentoPostventa::TIPO_CANCELACION);
+
             return $documento->fresh();
         });
     }
@@ -130,6 +139,8 @@ class PostventaService
         }
 
         return DB::transaction(function () use ($venta, $ids, $motivo, $formaReembolso): DocumentoPostventa {
+            $sesion = $this->sesionParaReembolsoEfectivo($formaReembolso);
+
             $venta = Venta::query()->lockForUpdate()->findOrFail($venta->getKey());
 
             if (! $venta->esElegibleParaDevolucion()) {
@@ -226,8 +237,60 @@ class PostventaService
                     : Venta::ESTADO_PARCIALMENTE_DEVUELTA,
             ]);
 
+            $this->reembolsarSiEfectivo($sesion, $documento, $venta, $totalCentavos, DocumentoPostventa::TIPO_DEVOLUCION);
+
             return $documento->fresh();
         });
+    }
+
+    /**
+     * Sesión ABIERTA bajo lock cuando el reembolso es en efectivo (B14).
+     * Tarjetas/transferencias/otro NO tocan el cajón físico: retorna null.
+     */
+    private function sesionParaReembolsoEfectivo(string $formaReembolso): ?SesionCaja
+    {
+        if (! in_array($formaReembolso, DocumentoPostventa::FORMAS_REEMBOLSO, true)) {
+            throw new DomainException('La forma de reembolso no es válida.');
+        }
+
+        if ($formaReembolso !== DocumentoPostventa::FORMA_EFECTIVO) {
+            return null;
+        }
+
+        $sesion = SesionCaja::query()
+            ->lockForUpdate()
+            ->where('user_id_apertura', Auth::id())
+            ->abiertas()
+            ->first();
+
+        if (! $sesion instanceof SesionCaja) {
+            throw new DomainException('Debes abrir una caja para realizar un reembolso en efectivo.');
+        }
+
+        return $sesion;
+    }
+
+    /**
+     * Registra el REEMBOLSO_EFECTIVO físico dentro de la misma transacción.
+     */
+    private function reembolsarSiEfectivo(?SesionCaja $sesion, DocumentoPostventa $documento, Venta $venta, int $totalCentavos, string $tipo): void
+    {
+        if (! $sesion instanceof SesionCaja) {
+            return;
+        }
+
+        $etiqueta = $tipo === DocumentoPostventa::TIPO_CANCELACION ? 'cancelación' : 'devolución';
+
+        app(CajaService::class)->registrarReembolsoEfectivo(
+            $sesion,
+            Auth::user(),
+            $totalCentavos,
+            [
+                'venta_id' => $venta->id,
+                'documento_postventa_id' => $documento->id,
+            ],
+            "Reembolso en efectivo por {$etiqueta} {$venta->folio} ({$documento->folio})"
+        );
     }
 
     /**

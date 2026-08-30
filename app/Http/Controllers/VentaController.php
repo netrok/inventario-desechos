@@ -71,6 +71,7 @@ class VentaController extends Controller
             'user',
             'detalles.item',
             'detalles.item.categoria',
+            'pagos',
         ]);
 
         $defaultWidth = Configuracion::ticketAncho();

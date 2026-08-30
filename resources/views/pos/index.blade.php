@@ -216,8 +216,24 @@
                         <div class="px-5 py-4 space-y-4">
                             <div class="flex items-center justify-between text-sm">
                                 <span class="text-gray-600">Total (equipos)</span>
-                                <span class="text-lg font-bold text-gray-900">{{ $total }}</span>
+                                <span class="text-lg font-bold text-gray-900" data-total-venta="{{ $total }}">{{ $total }}</span>
                             </div>
+
+                            @if(! $sesionCaja)
+                                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 space-y-1">
+                                    <p class="font-semibold">Debes abrir una caja antes de registrar ventas.</p>
+                                    @can('cajas.abrir')
+                                        <a href="{{ route('cajas.abrir') }}" class="font-semibold underline">Abrir caja</a>
+                                    @else
+                                        <p>Solicita a un operador que abra una caja.</p>
+                                    @endcan
+                                </div>
+                            @else
+                                <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                                    Caja operativa: <strong>{{ $sesionCaja->caja->nombre }}</strong> ·
+                                    sesión <strong>{{ $sesionCaja->folio }}</strong>
+                                </div>
+                            @endif
 
                             @can('ventas.crear')
                                 <form method="POST" action="{{ route('pos.checkout') }}" class="space-y-4">
@@ -228,16 +244,22 @@
                                     @endforeach
 
                                     <div>
-                                        <label for="forma_pago" class="block text-xs font-medium text-gray-600 mb-1">Forma de pago</label>
-                                        <select
-                                            name="forma_pago"
-                                            id="forma_pago"
-                                            class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900"
-                                        >
-                                            @foreach($formasPago as $f)
-                                                <option value="{{ $f }}" @selected(old('forma_pago', 'EFECTIVO') === $f)>{{ $f }}</option>
-                                            @endforeach
-                                        </select>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="block text-xs font-medium text-gray-600">Pagos</label>
+                                            <button type="button" data-agregar-pago
+                                                    class="text-xs font-semibold text-gray-900 hover:underline">
+                                                + Agregar método
+                                            </button>
+                                        </div>
+
+                                        <div data-pagos-cont class="space-y-2"></div>
+
+                                        <p data-estado-pagos role="status" aria-live="polite"
+                                           class="mt-1 text-xs text-gray-500" style="min-height:1rem"></p>
+
+                                        <div data-cambio-cont class="hidden rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm">
+                                            <span class="text-sky-800">Cambio a entregar: <strong data-cambio-total>$0.00</strong></span>
+                                        </div>
                                     </div>
 
                                     <div>
@@ -245,14 +267,14 @@
                                         <textarea
                                             name="notas"
                                             id="notas"
-                                            rows="3"
+                                            rows="2"
                                             placeholder="Detalles de la venta si aplica"
                                             class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900"
                                         >{{ old('notas') }}</textarea>
                                     </div>
 
-                                    <button type="submit"
-                                            {{ $items->isEmpty() ? 'disabled' : '' }}
+                                    <button type="submit" data-boton-pagar
+                                            {{ $items->isEmpty() || ! $sesionCaja ? 'disabled' : '' }}
                                             class="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed">
                                         Registrar venta
                                     </button>
@@ -414,6 +436,184 @@
             }
         });
     })();
+
+        // ============ Pagos combinados (B14) ============
+        (() => {
+            const FILAS_NETAS = [
+                @foreach($metodosPago as $m)
+                    @json($m),
+                @endforeach
+            ];
+
+            const cont = document.querySelector('[data-pagos-cont]');
+            const agregarBtn = document.querySelector('[data-agregar-pago]');
+            const totalEl = document.querySelector('[data-total-venta]');
+            const estadoPagos = document.querySelector('[data-estado-pagos]');
+            const cambioCont = document.querySelector('[data-cambio-cont]');
+            const cambioTotal = document.querySelector('[data-cambio-total]');
+            const botonPagar = document.querySelector('[data-boton-pagar]');
+            if (!cont || !totalEl) return;
+
+            const totalCentavos = MoneyCentavos(totalEl.textContent);
+
+            function MoneyCentavos(str) {
+                const num = parseFloat(String(str).replace(/[^0-9.\-]/g, ''));
+                return Math.round((Number.isNaN(num) ? 0 : num) * 100);
+            }
+
+            function fmt(centavos) {
+                return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(centavos / 100);
+            }
+
+            function crearFila(metodo) {
+                const fila = document.createElement('div');
+                fila.className = 'rounded-lg border border-gray-200 p-3 space-y-2';
+
+                const cabecera = document.createElement('div');
+                cabecera.className = 'flex items-center justify-between';
+                const sel = document.createElement('select');
+                sel.name = 'pagos[][metodo]';
+                sel.className = 'rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900';
+                FILAS_NETAS.forEach((m) => {
+                    const op = document.createElement('option');
+                    op.value = m; op.textContent = m;
+                    sel.appendChild(op);
+                });
+                sel.value = metodo;
+                const quitar = document.createElement('button');
+                quitar.type = 'button';
+                quitar.textContent = 'Quitar';
+                quitar.className = 'text-xs text-rose-600 hover:underline';
+                quitar.addEventListener('click', () => { fila.remove(); renumerar(); recalcular(); });
+                cabecera.append(sel); cabecera.append(quitar);
+
+                const montoSel = document.createElement('input');
+                montoSel.name = 'pagos[][monto_aplicado]';
+                montoSel.type = 'number';
+                montoSel.step = '0.01';
+                montoSel.min = '0';
+                montoSel.placeholder = 'Monto';
+                montoSel.required = true;
+                montoSel.className = 'w-full rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900';
+
+                const recibidoCont = document.createElement('div');
+                recibidoCont.className = 'hidden';
+                const recibido = document.createElement('input');
+                recibido.name = 'pagos[][efectivo_recibido]';
+                recibido.type = 'number';
+                recibido.step = '0.01';
+                recibido.min = '0';
+                recibido.placeholder = 'Efectivo recibido';
+                recibido.className = 'w-full rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900';
+
+                const referencia = document.createElement('input');
+                referencia.name = 'pagos[][referencia]';
+                referencia.type = 'text';
+                referencia.maxLength = '100';
+                referencia.placeholder = 'Referencia (tarjeta/transferencia)';
+                referencia.className = 'w-full rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900 hidden';
+
+                function toggleCampos() {
+                    const esEfectivo = sel.value === 'EFECTIVO';
+                    recibidoCont.classList.toggle('hidden', !esEfectivo);
+                    recibido.required = esEfectivo;
+                    referencia.classList.toggle('hidden', esEfectivo);
+                    referencia.required = !esEfectivo && FILAS_NETAS.includes(sel.value);
+                    if (!esEfectivo && recibido.value !== '') recibido.value = '';
+                    recalcular();
+                }
+
+                sel.addEventListener('change', toggleCampos);
+                recibido.addEventListener('input', recalcular);
+                montoSel.addEventListener('input', recalcular);
+
+                recibidoCont.append(recibido);
+                fila.append(cabecera, montoSel, recibidoCont, referencia);
+                fila._campos = { sel, montoSel, recibido, referencia };
+                toggleCampos();
+                return fila;
+            }
+
+            // Los campos de una fila usan el mismo índice explícito (pagos[N][...])
+            // para que PHP agrupe cada fila como un solo pago. Se re-numeran tras
+            // agregar o quitar filas para mantener índices contiguos 0..N.
+            function renumerar() {
+                cont.querySelectorAll(':scope > .rounded-lg.border').forEach((fila, i) => {
+                    const c = fila._campos;
+                    if (!c) return;
+                    c.sel.name = 'pagos[' + i + '][metodo]';
+                    c.montoSel.name = 'pagos[' + i + '][monto_aplicado]';
+                    c.recibido.name = 'pagos[' + i + '][efectivo_recibido]';
+                    c.referencia.name = 'pagos[' + i + '][referencia]';
+                });
+            }
+
+            // Semilla: primer pago en EFECTIVO si no viene del servidor.
+            if (cont.children.length === 0) {
+                cont.appendChild(crearFila('EFECTIVO'));
+            }
+
+            agregarBtn.addEventListener('click', () => {
+                const usados = Array.from(cont.querySelectorAll('select[name^="pagos["]')).map((s) => s.value);
+                const neto = FILAS_NETAS.find((m) => !usados.includes(m)) || FILAS_NETAS[0];
+                cont.appendChild(crearFila(neto));
+                renumerar();
+                recalcular();
+            });
+
+            function recalcular() {
+                let aplicado = 0;
+                let efectivoRecibido = 0;
+
+                cont.querySelectorAll(':scope > .rounded-lg.border').forEach((fila) => {
+                    const c = fila._campos;
+                    if (!c) return;
+                    aplicado += MoneyCentavos(c.montoSel.value);
+                    if (c.sel.value === 'EFECTIVO') {
+                        efectivoRecibido += MoneyCentavos(c.recibido.value);
+                    }
+                });
+
+                const faltante = totalCentavos - aplicado;
+
+                if (faltante > 0) {
+                    estadoPagos.textContent = 'Faltan ' + fmt(faltante) + ' por cubrir del total.';
+                    estadoPagos.className = 'mt-1 text-xs text-rose-600';
+                    cambioCont.classList.add('hidden');
+                    botonPagar && (botonPagar.disabled = true);
+                } else if (faltante < 0) {
+                    estadoPagos.textContent = 'Los pagos superan el total en ' + fmt(-faltante) + '.';
+                    estadoPagos.className = 'mt-1 text-xs text-rose-600';
+                    cambioCont.classList.add('hidden');
+                    botonPagar && (botonPagar.disabled = true);
+                } else {
+                    estadoPagos.textContent = '';
+                    estadoPagos.className = 'mt-1 text-xs text-gray-500';
+                    if (efectivoRecibido >= aplicado && efectivoRecibido > 0) {
+                        const cambio = efectivoRecibido - aplicado;
+                        cambioTotal.textContent = fmt(cambio);
+                        cambioCont.classList.toggle('hidden', cambio <= 0);
+                    } else {
+                        cambioCont.classList.add('hidden');
+                    }
+                    const sinSesion = {{ $sesionCaja ? 'false' : 'true' }};
+                    botonPagar && (botonPagar.disabled = sinSesion);
+                }
+            }
+
+            renumerar();
+
+            cont.querySelectorAll(':scope > .rounded-lg.border').forEach((fila) => {
+                const c = fila._campos;
+                if (!c) return;
+                c.montoSel.addEventListener('input', recalcular);
+                c.recibido.addEventListener('input', recalcular);
+                c.referencia.addEventListener('input', recalcular);
+                c.sel.addEventListener('change', recalcular);
+            });
+
+            recalcular();
+        })();
     </script>
     @endpush
 </x-app-layout>

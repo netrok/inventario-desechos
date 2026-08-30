@@ -6,12 +6,17 @@ use App\Models\Categoria;
 use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Ubicacion;
+use App\Services\CajaService;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     public function index()
     {
+        // B14: sesión de caja abierta del usuario (null si no tiene o está cerrada)
+        $cajaSesion = auth()->user()->can('cajas.ver')
+            ? app(CajaService::class)->sesionAbiertaDe(auth()->user())
+            : null;
         // KPIs
         $kpis = Item::query()
             ->selectRaw("
@@ -61,7 +66,8 @@ class DashboardController extends Controller
             'topUbicaciones',
             'topCategorias',
             'ultMovs',
-            'movs7d'
+            'movs7d',
+            'cajaSesion'
         ));
     }
 }

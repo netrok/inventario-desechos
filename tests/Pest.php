@@ -45,3 +45,67 @@ function something()
 {
     // ..
 }
+
+/**
+ * Helpers B14: caja y pagos para el POS bajo el nuevo contrato.
+ */
+function openCajaFor(\App\Models\User $user, float $fondo = 0.0): \App\Models\SesionCaja
+{
+    $existente = \App\Models\SesionCaja::query()
+        ->where('user_id_apertura', $user->id)
+        ->abiertas()
+        ->first();
+
+    if ($existente) {
+        return $existente;
+    }
+
+    $ca = \App\Models\Caja::create([
+        'nombre' => 'Caja de pruebas '.$user->id.(string) uniqid('', false),
+        'activa' => true,
+        'descripcion' => 'Caja de pruebas.',
+    ]);
+
+    return \App\Models\SesionCaja::create([
+        'caja_id' => $ca->id,
+        'user_id_apertura' => $user->id,
+        'fondo_inicial' => number_format($fondo, 2, '.', ''),
+        'estado' => \App\Models\SesionCaja::ESTADO_ABIERTA,
+    ]);
+}
+
+function pagosEfectivo(float $total, float $recibido = 0.0): array
+{
+    $r = $recibido > 0 ? $recibido : $total;
+
+    return ['pagos' => [[
+        'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+        'monto_aplicado' => number_format($total, 2, '.', ''),
+        'efectivo_recibido' => number_format($r, 2, '.', ''),
+    ]]];
+}
+
+function pagosMetodo(float $total, string $metodo, ?string $referencia = null): array
+{
+    return ['pagos' => [[
+        'metodo' => $metodo,
+        'monto_aplicado' => number_format($total, 2, '.', ''),
+        'referencia' => $referencia,
+    ]]];
+}
+
+function pagosMixtos(float $total, float $efectivo, string $segundoMetodo, float $segundo): array
+{
+    return ['pagos' => [
+        [
+            'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+            'monto_aplicado' => number_format($efectivo, 2, '.', ''),
+            'efectivo_recibido' => number_format($efectivo, 2, '.', ''),
+        ],
+        [
+            'metodo' => $segundoMetodo,
+            'monto_aplicado' => number_format($segundo, 2, '.', ''),
+            'referencia' => 'TRX-'.rand(1000, 9999),
+        ],
+    ]];
+}

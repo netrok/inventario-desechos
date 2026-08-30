@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 class Venta extends Model
 {
-    public const FORMAS_PAGO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'OTRO'];
+    public const FORMAS_PAGO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'MIXTO', 'OTRO'];
 
     public const ESTADO_ACTIVA = 'ACTIVA';
 
@@ -100,6 +100,11 @@ class Venta extends Model
     public function documentosPostventa(): HasMany
     {
         return $this->hasMany(DocumentoPostventa::class, 'venta_id');
+    }
+
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(PagoVenta::class, 'venta_id')->orderBy('orden')->orderBy('id');
     }
 
     /**
