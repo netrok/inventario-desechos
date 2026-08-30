@@ -24,6 +24,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: inventario_desechos_test
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,18 +78,9 @@ jobs:
         run: echo "APP_KEY=$(php -r 'echo "base64:".base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
 
       - name: Apply migrations against Postgres
-        env:
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_DATABASE: inventario_desechos_test
-          DB_USERNAME: postgres
-          DB_PASSWORD: postgres
-          APP_ENV: testing
         run: php artisan migrate --force
 
       - name: Run test suite
-        env:
-          DB_PASSWORD: postgres
         run: php artisan test --env=testing
 
       - name: Laravel Pint
