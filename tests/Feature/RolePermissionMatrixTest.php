@@ -24,6 +24,7 @@ dataset('matriz_rol_permisos', [
         'dashboard.ver',
         'items.ver', 'items.crear', 'items.editar',
         'items.cambiar_estado', 'items.mover',
+        'items.revisar_devolucion',
         'reportes.ver',
         'categorias.ver', 'categorias.crear', 'categorias.editar',
         'ubicaciones.ver', 'ubicaciones.crear', 'ubicaciones.editar',
@@ -80,11 +81,11 @@ it('el fresh no crea permisos huérfanos de ventas, papelera ni catálogos', fun
     ])->count())->toBe(0);
 });
 
-it('la matriz tiene 29 permisos canónicos y Admin reúne los 29', function () {
-    expect(Permission::count())->toBe(29);
+it('la matriz tiene 30 permisos canónicos y Admin reúne los 30', function () {
+    expect(Permission::count())->toBe(30);
 
     $admin = Role::findByName('Admin', 'web');
-    expect($admin->permissions()->count())->toBe(29);
+    expect($admin->permissions()->count())->toBe(30);
 });
 
 it('configuracion.editar está asignado exclusivamente al rol Admin', function () {
@@ -181,7 +182,7 @@ it('el seeder es idempotente y no duplica roles ni permisos', function () {
     expect(User::whereHas('roles', fn ($q) => $q->where('name', 'Admin'))->count())->toBe($adminAntes);
 
     $almacen = Role::findByName('Almacen', 'web');
-    expect($almacen->permissions()->count())->toBe(13);
+    expect($almacen->permissions()->count())->toBe(14);
 });
 
 it('un admin reúne todos los permisos y puede administrar usuarios', function () {

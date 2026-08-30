@@ -238,6 +238,14 @@
                                                class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                                                 Ver
                                             </a>
+                                            @if($item->estado === 'DEVUELTO'
+                                                && isset($devueltosPendientes[$item->id])
+                                                && auth()->user()->can('items.revisar_devolucion'))
+                                                <a href="{{ route('items.revision', $devueltosPendientes[$item->id]) }}"
+                                                   class="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                                                    Revisar
+                                                </a>
+                                            @endif
                                             @can('items.editar')
                                                 <a href="{{ route('items.edit', $item) }}"
                                                    class="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black">

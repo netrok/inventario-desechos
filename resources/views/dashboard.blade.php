@@ -18,20 +18,34 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 @php
                     $cards = [
-                        ['Total', $kpis->total ?? 0],
-                        ['Disponible', $kpis->disponible ?? 0],
-                        ['Reservado', $kpis->reservado ?? 0],
-                        ['Reparación', $kpis->reparacion ?? 0],
-                        ['Vendido', $kpis->vendido ?? 0],
-                        ['Baja', $kpis->baja ?? 0],
+                        ['Total', $kpis->total ?? 0, null],
+                        ['Disponible', $kpis->disponible ?? 0, 'DISPONIBLE'],
+                        ['Reservado', $kpis->reservado ?? 0, 'RESERVADO'],
+                        ['Reparación', $kpis->reparacion ?? 0, 'REPARACION'],
+                        ['Devueltos pendientes', $kpis->devuelto ?? 0, 'DEVUELTO'],
+                        ['Vendido', $kpis->vendido ?? 0, 'VENDIDO'],
+                        ['Baja', $kpis->baja ?? 0, 'BAJA'],
                     ];
                 @endphp
 
-                @foreach($cards as [$label, $val])
-                    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
-                        <div class="text-xs text-gray-500">{{ $label }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-gray-900">{{ $val }}</div>
-                    </div>
+                @foreach($cards as [$label, $val, $estado])
+                    @php
+                        $href = auth()->user()->can('items.ver')
+                            ? route('items.index', $estado ? ['estado' => $estado] : [])
+                            : null;
+                    @endphp
+
+                    @if($href)
+                        <a href="{{ $href }}" class="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 block hover:border-gray-300 hover:shadow">
+                            <div class="text-xs text-gray-500">{{ $label }}</div>
+                            <div class="mt-1 text-2xl font-semibold text-gray-900">{{ $val }}</div>
+                        </a>
+                    @else
+                        <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
+                            <div class="text-xs text-gray-500">{{ $label }}</div>
+                            <div class="mt-1 text-2xl font-semibold text-gray-900">{{ $val }}</div>
+                        </div>
+                    @endif
                 @endforeach
             </div>
 

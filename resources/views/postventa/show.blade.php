@@ -33,6 +33,16 @@
                 </div>
             @endif
 
+            @if(session('pendientesRevision') && auth()->user()->can('items.revisar_devolucion'))
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800 flex flex-wrap items-center justify-between gap-2">
+                    <span>Los artículos devueltos quedaron pendientes de revisión.</span>
+                    <a href="{{ route('items.index', ['estado' => 'DEVUELTO']) }}"
+                       class="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700">
+                        Revisar artículos devueltos
+                    </a>
+                </div>
+            @endif
+
             {{-- Datos del documento --}}
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div class="rounded-2xl border border-gray-200 bg-white p-4">

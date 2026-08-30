@@ -53,6 +53,7 @@ class RolesAndAdminSeeder extends Seeder
             // Acciones de ciclo de vida
             'items.cambiar_estado',
             'items.mover',
+            'items.revisar_devolucion',
 
             // Reportes
             'reportes.ver',
@@ -114,6 +115,7 @@ class RolesAndAdminSeeder extends Seeder
             'dashboard.ver',
             'items.ver', 'items.crear', 'items.editar',
             'items.cambiar_estado', 'items.mover',
+            'items.revisar_devolucion',
             'reportes.ver',
             'categorias.ver', 'categorias.crear', 'categorias.editar',
             'ubicaciones.ver', 'ubicaciones.crear', 'ubicaciones.editar',
