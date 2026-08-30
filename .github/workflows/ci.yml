@@ -74,6 +74,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Build frontend assets
+        run: npm run build
+
       - name: Generate ephemeral APP_KEY
         run: echo "APP_KEY=$(php -r 'echo "base64:".base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
 
@@ -91,6 +94,3 @@ jobs:
 
       - name: Npm audit
         run: npm audit --omit=dev
-
-      - name: Build frontend assets
-        run: npm run build
