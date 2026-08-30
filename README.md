@@ -102,9 +102,9 @@ php artisan serve  # o tu servidor web
 
 ```bash
 cp .env.testing.example .env.testing   # DB de pruebas aislada
-php artisan test                       # suite completa (304 tests / 1054 assertions / 0 failures)
+php artisan test                       # suite completa (356 tests / 1347 assertions / 0 failures)
 php artisan migrate:fresh --seed --env=testing   # instala limpia de pruebas
-php artisan migrate:status --env=testing        # 29 Ran / 0 Pending
+php artisan migrate:status --env=testing        # 30 Ran / 0 Pending
 ```
 
 La suite cubre matriz de roles, atomicidad del POS, dinero exacto en centavos, ticket con precios históricos, FK/UNIQUE de PostgreSQL, integridad de trazabilidad (actor y ubicaciones históricas), permisos granulares de Items y el flujo postventa (cancelación/devolución atómicas, folios `DEV-XXXXXX`, exclusión mutua, rollback, constraints BD y comodato de estados).

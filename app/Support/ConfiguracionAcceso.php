@@ -11,8 +11,11 @@ use App\Models\User;
  * configuracion.editar. Un usuario no Admin al que se le asigne el permiso por
  * error o manipulación recibe HTTP 403 (defensa en el middleware de la ruta y
  * en el controlador). Además, `configuracion.editar` nunca debe poder asignarse
- * a un rol diferente de Admin: el guard server-side protege el seeder y
- * cualquier futura administración de roles.
+ * a un rol diferente de Admin.
+ *
+ * Nota sobre el alcance del guard: el guard protege el mapa/seeder actual.
+ * Cualquier futura administración de roles o permisos deberá reutilizar
+ * explícitamente esta validación.
  */
 final class ConfiguracionAcceso
 {
