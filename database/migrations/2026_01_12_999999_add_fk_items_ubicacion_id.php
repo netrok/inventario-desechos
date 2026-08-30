@@ -5,14 +5,15 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         // Asegurar que existan tablas/columna antes
-        if (!Schema::hasTable('items') || !Schema::hasTable('ubicaciones')) {
+        if (! Schema::hasTable('items') || ! Schema::hasTable('ubicaciones')) {
             return;
         }
-        if (!Schema::hasColumn('items', 'ubicacion_id')) {
+        if (! Schema::hasColumn('items', 'ubicacion_id')) {
             return;
         }
 
@@ -24,7 +25,7 @@ return new class extends Migration {
             limit 1
         ");
 
-        if (!$exists) {
+        if (! $exists) {
             Schema::table('items', function (Blueprint $table) {
                 $table->foreign('ubicacion_id', 'items_ubicacion_id_foreign')
                     ->references('id')->on('ubicaciones')
@@ -35,7 +36,7 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('items')) {
+        if (! Schema::hasTable('items')) {
             return;
         }
 
