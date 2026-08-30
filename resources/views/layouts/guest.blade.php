@@ -50,6 +50,10 @@
                 <p class="mt-6 text-center text-xs text-teal-100/70">
                     Acceso exclusivo para personal autorizado
                 </p>
+
+                <p class="mt-3 text-center text-xs text-teal-100/70">
+                    {{ config('app.name') }} · Desarrollado por {{ config('app.author') }} · {{ config('app.copyright_year') }}
+                </p>
             </div>
         </div>
 

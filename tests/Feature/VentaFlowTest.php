@@ -533,17 +533,28 @@ it('hace rollback completo cuando falla la creacion del Movimiento VENTA', funct
  * Unicidad de Item en venta_detalles (defensa a nivel BD)
  * =========================
  */
-it('la BD rechaza por UNIQUE que un item pertenezca a dos ventas', function () {
+it('un item SÍ puede pertenecer a ventas distintas (reventa histórica legítima)', function () {
     $ventaA = Venta::create(['user_id' => posSeller()->id, 'total' => 100, 'forma_pago' => 'EFECTIVO']);
     $ventaB = Venta::create(['user_id' => posSeller()->id, 'total' => 200, 'forma_pago' => 'TARJETA']);
+    $item = posItem(50.0);
+
+    $ventaA->detalles()->create(['item_id' => $item->id, 'precio' => $item->precio]);
+    $ventaB->detalles()->create(['item_id' => $item->id, 'precio' => 200]);
+
+    $this->assertDatabaseCount('venta_detalles', 2);
+    expect(VentaDetalle::query()->where('item_id', $item->id)->count())->toBe(2);
+});
+
+it('la BD impide por UNIQUE(venta_id, item_id) el mismo item dos veces en la misma venta', function () {
+    $ventaA = Venta::create(['user_id' => posSeller()->id, 'total' => 300, 'forma_pago' => 'EFECTIVO']);
     $item = posItem(50.0);
 
     $ventaA->detalles()->create(['item_id' => $item->id, 'precio' => $item->precio]);
 
     $threw = false;
     try {
-        DB::transaction(function () use ($ventaB, $item) {
-            $ventaB->detalles()->create(['item_id' => $item->id, 'precio' => 200]);
+        DB::transaction(function () use ($ventaA, $item) {
+            $ventaA->detalles()->create(['item_id' => $item->id, 'precio' => 200]);
         });
     } catch (\Illuminate\Database\QueryException $e) {
         $threw = true;
@@ -553,17 +564,39 @@ it('la BD rechaza por UNIQUE que un item pertenezca a dos ventas', function () {
     $this->assertDatabaseCount('venta_detalles', 1);
 });
 
-it('existe la constraint UNIQUE y la FK RESTRICT de venta_detalles.item_id', function () {
-    $unique = DB::selectOne("
+it('venta_detalles usa UNIQUE(venta_id,item_id) + INDEX(item_id) y ya no UNIQUE(item_id)', function () {
+    $idItem = DB::selectOne("
+        SELECT attnum FROM pg_attribute
+        WHERE attrelid = 'venta_detalles'::regclass AND attname = 'item_id'
+    ")->attnum;
+    $idVenta = DB::selectOne("
+        SELECT attnum FROM pg_attribute
+        WHERE attrelid = 'venta_detalles'::regclass AND attname = 'venta_id'
+    ")->attnum;
+
+    $compuesto = DB::selectOne("
         SELECT conname FROM pg_constraint
         WHERE conrelid = 'venta_detalles'::regclass
           AND contype = 'u'
-          AND conkey = ARRAY[
-              (SELECT attnum FROM pg_attribute
-               WHERE attrelid = 'venta_detalles'::regclass AND attname = 'item_id')
-          ]
+          AND conkey = ARRAY[$idVenta::smallint, $idItem::smallint]
     ");
-    expect($unique?->conname)->toBe('venta_detalles_item_id_unique');
+    expect($compuesto?->conname)->toBe('venta_detalles_venta_id_item_id_unique');
+
+    $global = DB::selectOne("
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'venta_detalles'::regclass
+          AND contype = 'u'
+          AND conkey = ARRAY[$idItem::smallint]
+    ");
+    expect($global)->toBeNull();
+
+    $indexItem = DB::selectOne("
+        SELECT indexname FROM pg_indexes
+        WHERE tablename = 'venta_detalles'
+          AND indexname = 'venta_detalles_item_id_index'
+        LIMIT 1
+    ");
+    expect($indexItem?->indexname)->toBe('venta_detalles_item_id_index');
 
     $fk = DB::selectOne("
         SELECT confdeltype FROM pg_constraint

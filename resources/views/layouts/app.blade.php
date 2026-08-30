@@ -22,22 +22,35 @@
     </head>
 
     <body class="font-sans antialiased">
-        <div class="min-h-screen bg-gray-100">
+        <div class="flex min-h-screen flex-col bg-gray-100">
             @include('layouts.navigation')
 
             <!-- Page Heading -->
             @isset($header)
                 <header class="bg-white shadow">
-                    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                    <div class="max-w-screen-2xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
                 </header>
             @endisset
 
             <!-- Page Content -->
-            <main>
+            <main class="flex-1">
                 {{ $slot }}
             </main>
+
+            <!-- Footer (créditos discretos) -->
+            <footer class="border-t border-gray-200 bg-white">
+                <div class="max-w-screen-2xl mx-auto px-4 py-3 sm:px-6 lg:px-8">
+                    <p class="text-center text-xs text-gray-500">
+                        {{ config('app.name') }} · Desarrollado por {{ config('app.author') }} · {{ config('app.copyright_year') }}
+                        <span aria-hidden="true">·</span>
+                        <a href="{{ route('acerca') }}" class="underline hover:text-gray-700">Acerca del sistema</a>
+                    </p>
+                </div>
+            </footer>
         </div>
+
+        @stack('scripts')
     </body>
 </html>

@@ -3,27 +3,35 @@
 namespace App\Http\Controllers;
 
 use App\Models\Configuracion;
+use App\Support\ConfiguracionAcceso;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class ConfiguracionController extends Controller
 {
     /**
-     * Formulario de configuración (permiso configuracion.ver para ver, editar solo Admin).
+     * Configuración general (permiso configuracion.ver para ver).
+     * El modo edición solo se ofrece a quien cumple rol Admin + configuracion.editar.
      */
-    public function edit()
+    public function edit(Request $request)
     {
         $configuracion = Configuracion::obtener();
 
-        return view('configuracion.edit', ['configuracion' => $configuracion]);
+        return view('configuracion.edit', [
+            'configuracion' => $configuracion,
+            'editable' => ConfiguracionAcceso::puedeEditar($request->user()),
+        ]);
     }
 
     /**
-     * Guarda la configuración (permiso configuracion.editar).
+     * Guarda la configuración: exige rol Admin además de configuracion.editar.
+     * Defensa centralizada (independiente del middleware de la ruta).
      * Solo datos de identidad/ticket; NUNCA secretos.
      */
     public function update(Request $request)
     {
+        abort_unless(ConfiguracionAcceso::puedeEditar($request->user()), 403);
+
         $data = $request->validate([
             'empresa_nombre' => ['nullable', 'string', 'max:255'],
             'empresa_rfc' => ['nullable', 'string', 'max:20'],

@@ -18,7 +18,7 @@
     </x-slot>
 
     <div class="py-6">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-5">
+        <div class="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-5">
 
             @if(session('success'))
                 <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

@@ -17,6 +17,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Author
+    |--------------------------------------------------------------------------
+    |
+    | Public, non-sensitive product authorship used in the discreet branding
+    | shown on the login page and the authenticated footer. It is a single
+    | source of truth: change it here and it updates everywhere.
+    |
+    */
+
+    'author' => 'Ernesto',
+
+    'copyright_year' => '2026',
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

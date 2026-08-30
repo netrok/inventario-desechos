@@ -109,24 +109,21 @@ class RolesAndAdminSeeder extends Seeder
         $ventasRole = Role::where('name', 'Ventas')->where('guard_name', $guard)->firstOrFail();
         $auditorRole = Role::where('name', 'Auditor')->where('guard_name', $guard)->firstOrFail();
 
-        // Admin = todo
-        $adminRole->syncPermissions($perms);
-
         // Almacén (operativo de inventario)
-        $almacenRole->syncPermissions([
+        $almacenPermisos = [
             'dashboard.ver',
             'items.ver', 'items.crear', 'items.editar',
             'items.cambiar_estado', 'items.mover',
             'reportes.ver',
             'categorias.ver', 'categorias.crear', 'categorias.editar',
             'ubicaciones.ver', 'ubicaciones.crear', 'ubicaciones.editar',
-        ]);
+        ];
 
         // Ventas (POS: consulta + registro de ventas + devoluciones; NO cancela).
         // La cancelación es una reversa financiera total reservada a Admin.
         // Clientes: puede ver/crear/editar (para POS necesita clientes), pero
         // NO desactivar (acción de control reservada a Admin).
-        $ventasRole->syncPermissions([
+        $ventasPermisos = [
             'dashboard.ver',
             'items.ver',
             'ventas.ver',
@@ -135,10 +132,10 @@ class RolesAndAdminSeeder extends Seeder
             'clientes.ver',
             'clientes.crear',
             'clientes.editar',
-        ]);
+        ];
 
         // Auditor (solo lectura) + consulta de configuración y clientes.
-        $auditorRole->syncPermissions([
+        $auditorPermisos = [
             'dashboard.ver',
             'items.ver',
             'reportes.ver',
@@ -147,7 +144,26 @@ class RolesAndAdminSeeder extends Seeder
             'ventas.ver',
             'clientes.ver',
             'configuracion.ver',
+        ];
+
+        // Guard server-side: la Configuración General solo puede editarla Admin.
+        // configuracion.editar queda prohibido para cualquier rol no Admin, aunque
+        // más adelante alguien edite este seeder o exista una futura UI de roles.
+        \App\Support\ConfiguracionAcceso::assertRolesSeguros([
+            'Admin' => $perms,
+            'Almacen' => $almacenPermisos,
+            'Ventas' => $ventasPermisos,
+            'Auditor' => $auditorPermisos,
         ]);
+
+        // Admin = todo
+        $adminRole->syncPermissions($perms);
+
+        $almacenRole->syncPermissions($almacenPermisos);
+
+        $ventasRole->syncPermissions($ventasPermisos);
+
+        $auditorRole->syncPermissions($auditorPermisos);
 
         /**
          * Usuario Admin inicial.

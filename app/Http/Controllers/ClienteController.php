@@ -130,7 +130,11 @@ class ClienteController extends Controller
      */
     public function search(Request $request)
     {
-        $q = trim((string) $request->query('q', ''));
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $q = trim((string) ($data['q'] ?? ''));
 
         $clientes = Cliente::query()
             ->activos()
@@ -145,7 +149,7 @@ class ClienteController extends Controller
             ->limit(20)
             ->get(['id', 'codigo', 'tipo', 'nombre', 'rfc', 'telefono', 'email']);
 
-        return response()->json($clientes);
+        return response()->json(['clientes' => $clientes]);
     }
 
     /**

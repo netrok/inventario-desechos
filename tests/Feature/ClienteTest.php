@@ -147,8 +147,8 @@ it('search devuelve solo activos, limitado y ordenado por nombre', function () {
     $this->actingAs($user)
         ->get(route('clientes.search', ['q' => 'Alfa']))
         ->assertOk()
-        ->assertJsonCount(1)
-        ->assertJsonPath('0.nombre', 'Alfa');
+        ->assertJsonCount(1, 'clientes')
+        ->assertJsonPath('clientes.0.nombre', 'Alfa');
 });
 
 it('la ficha muestra el historial de ventas del cliente', function () {

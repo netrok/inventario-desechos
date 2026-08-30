@@ -27,6 +27,9 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     // Sin DELETE /profile: las cuentas se administran vía usuarios.eliminar.
 
+    // Créditos del sistema (información pública, sin detalles técnicos).
+    Route::view('/acerca', 'acerca')->name('acerca');
+
     /**
      * =========================
      * Catálogos
@@ -135,7 +138,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::put('configuracion', [ConfiguracionController::class, 'update'])
         ->name('configuracion.update')
-        ->middleware('permission:configuracion.editar');
+        ->middleware(['permission:configuracion.editar', 'role:Admin']);
 
     /**
      * =========================
