@@ -1,6 +1,6 @@
 <x-app-layout>
     <div class="py-6">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-6">
 
             <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 <h1 class="text-xl font-semibold text-gray-900">Reportes</h1>

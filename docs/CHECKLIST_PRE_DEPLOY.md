@@ -40,8 +40,8 @@ Antes de publicar un release en producción (en especial el primer deploy del `f
 
 ## Calidad
 
-- [ ] `php artisan test` (suite completa de regresión; base 260 tests / 914 assertions / 0 failures).
-- [ ] `php artisan migrate:status` sin pendientes (base 26 Ran / 0 Pending).
+- [ ] `php artisan test` (suite completa de regresión; base 304 tests / 1054 assertions / 0 failures).
+- [ ] `php artisan migrate:status` sin pendientes (base 29 Ran / 0 Pending).
 - [ ] `composer audit --no-dev` en 0 advisories y `npm audit --omit=dev` en 0 vulnerabilities (runtime limpio; los advisories residuales quedan solo en tooling de desarrollo: composer dev = phpunit/symfony-yaml, no bloquean el runtime).
 - [ ] Backup previo al release (PostgreSQL + storage + .env) — ver BACKUP_RESTORE.
 

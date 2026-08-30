@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cliente;
+use App\Models\Configuracion;
 use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Venta;
@@ -17,6 +19,8 @@ class PosController extends Controller
 {
     private const CART_KEY = 'pos.cart';
 
+    private const CLIENTE_KEY = 'pos.cliente_id';
+
     private function cartIds(): array
     {
         return array_values(array_map('intval', session(self::CART_KEY, [])));
@@ -25,6 +29,22 @@ class PosController extends Controller
     private function setCart(array $ids): void
     {
         session([self::CART_KEY => array_values(array_map('intval', $ids))]);
+    }
+
+    /**
+     * Cliente seleccionado en la sesión del POS (si existe y sigue activo).
+     * Nunca se confía en el navegador para el cliente de una venta: la fuente
+     * de verdad al confirmar es la BD, revalidada bajo lock dentro del checkout.
+     */
+    public function clienteSeleccionado(): ?Cliente
+    {
+        $id = (int) session(self::CLIENTE_KEY, 0);
+
+        if ($id <= 0) {
+            return null;
+        }
+
+        return Cliente::query()->activos()->find($id);
     }
 
     private function estadoError(Item $item): ?string
@@ -89,7 +109,41 @@ class PosController extends Controller
             'items' => $items->values(),
             'total' => Money::aPrecio($totalCentavos),
             'formasPago' => Venta::FORMAS_PAGO,
+            'cliente' => $this->clienteSeleccionado(),
         ]);
+    }
+
+    /**
+     * Selecciona un cliente para la venta (lo guarda en sesión).
+     * Se revalida de nuevo en el checkout bajo lock.
+     */
+    public function setCliente(Request $request)
+    {
+        $data = $request->validate([
+            'cliente_id' => ['required', 'integer'],
+        ]);
+
+        $cliente = Cliente::query()->activos()->find((int) $data['cliente_id']);
+
+        if (! $cliente instanceof Cliente) {
+            throw ValidationException::withMessages([
+                'cliente_id' => 'Cliente no encontrado o inactivo. Selecciona otro.',
+            ]);
+        }
+
+        session([self::CLIENTE_KEY => $cliente->id]);
+
+        return redirect()->route('pos.index')->with('success', "Cliente {$cliente->codigo} seleccionado.");
+    }
+
+    /**
+     * Quita el cliente seleccionado del carrito (cambiar cliente).
+     */
+    public function clearCliente()
+    {
+        session([self::CLIENTE_KEY => null]);
+
+        return redirect()->route('pos.index')->with('success', 'Cliente sin seleccionar.');
     }
 
     /**
@@ -157,8 +211,13 @@ class PosController extends Controller
      * Confirmación de venta atómica.
      *
      * - Total y precio SIEMPRE se calculan en el servidor desde la BD.
-     * - Cada Item se re-lee bajo FOR UPDATE (orden determinista por id).
-     * - Cualquier estado no vendible o precio inválido aborta TODA la venta.
+     * - Cliente REQUERIDO: se revalida bajo lock dentro de la transacción.
+     * - Orden de locks determinista para evitar deadlocks:
+     *     1) Cliente (lockForUpdate)
+     *     2) Items ordenados por id (lockForUpdate)
+     *   El postventa bloquea Venta->Detalle->Item; como aquí Venta recién se
+     *   INSERTA (no se bloquea fila previa) no hay ciclo de deadlock.
+     * - El snapshot del cliente se copia server-side desde el Cliente bloqueado.
      */
     public function checkout(Request $request)
     {
@@ -168,6 +227,14 @@ class PosController extends Controller
             'forma_pago' => ['required', Rule::in(Venta::FORMAS_PAGO)],
             'notas' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        $clienteId = (int) session(self::CLIENTE_KEY, 0);
+
+        if ($clienteId <= 0) {
+            throw ValidationException::withMessages([
+                'cliente_id' => 'Selecciona un cliente para registrar la venta.',
+            ]);
+        }
 
         $cart = $this->cartIds();
 
@@ -189,7 +256,23 @@ class PosController extends Controller
 
         $ids = $this->cartIds();
 
-        $venta = DB::transaction(function () use ($ids, $data) {
+        $venta = DB::transaction(function () use ($ids, $data, $clienteId) {
+            // Lock 1: Cliente. Debe existir y estar ACTIVO en el momento de la venta.
+            $cliente = Cliente::query()->lockForUpdate()->find($clienteId);
+
+            if (! $cliente instanceof Cliente) {
+                throw ValidationException::withMessages([
+                    'cliente_id' => 'El cliente seleccionado ya no existe.',
+                ]);
+            }
+
+            if (! $cliente->activo) {
+                throw ValidationException::withMessages([
+                    'cliente_id' => "El cliente {$cliente->codigo} está inactivo y no puede usarse en una venta.",
+                ]);
+            }
+
+            // Lock 2: Items ordenados por id.
             $items = Item::query()
                 ->whereIn('id', $ids)
                 ->lockForUpdate()
@@ -217,8 +300,17 @@ class PosController extends Controller
                 $totalCentavos += Money::aCentavos($item->precio);
             }
 
+            // Snapshot del cliente AL MOMENTO de la venta (server-side, desde el
+            // Cliente bloqueado). NO se reescribe posteriormente ni al editar el Cliente.
             $venta = Venta::create([
                 'user_id' => Auth::id(),
+                'cliente_id' => $cliente->id,
+                'cliente_codigo' => $cliente->codigo,
+                'cliente_nombre' => $cliente->nombre,
+                'cliente_rfc' => $cliente->rfc,
+                'cliente_telefono' => $cliente->telefono,
+                'cliente_email' => $cliente->email,
+                'cliente_tipo' => $cliente->tipo,
                 'total' => Money::aPrecio($totalCentavos),
                 'forma_pago' => $data['forma_pago'],
                 'notas' => $data['notas'] ?? null,
@@ -250,6 +342,16 @@ class PosController extends Controller
         });
 
         $this->setCart([]);
+        session([self::CLIENTE_KEY => null]);
+
+        // Autoprint: si está habilitado (y es seguro intentarlo), se abre el
+        // ticket para que una estación con --kiosk-printing lo imprima
+        // automáticamente al cargar. En un navegador normal muestra el diálogo.
+        if (Configuracion::ticketAutoprint()) {
+            return redirect()
+                ->route('ventas.ticket', ['venta' => $venta, 'autoprint' => 1])
+                ->with('success', "Venta {$venta->folio} registrada.");
+        }
 
         return redirect()->route('ventas.show', $venta)
             ->with('success', "Venta {$venta->folio} registrada correctamente.");

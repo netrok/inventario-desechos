@@ -4,6 +4,7 @@ use App\Models\Categoria;
 use App\Models\Item;
 use App\Models\Ubicacion;
 use App\Models\User;
+use App\Support\ConfiguracionAcceso;
 use Database\Seeders\RolesAndAdminSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -34,6 +35,8 @@ dataset('matriz_rol_permisos', [
         'categorias.ver',
         'ubicaciones.ver',
         'ventas.ver',
+        'clientes.ver',
+        'configuracion.ver',
     ]],
     'Ventas' => ['Ventas', [
         'dashboard.ver',
@@ -41,6 +44,9 @@ dataset('matriz_rol_permisos', [
         'ventas.ver',
         'ventas.crear',
         'ventas.devolver',
+        'clientes.ver',
+        'clientes.crear',
+        'clientes.editar',
     ]],
 ]);
 
@@ -72,6 +78,94 @@ it('el fresh no crea permisos huérfanos de ventas, papelera ni catálogos', fun
         'items.restaurar',
         'items.borrar_definitivo',
     ])->count())->toBe(0);
+});
+
+it('la matriz tiene 29 permisos canónicos y Admin reúne los 29', function () {
+    expect(Permission::count())->toBe(29);
+
+    $admin = Role::findByName('Admin', 'web');
+    expect($admin->permissions()->count())->toBe(29);
+});
+
+it('configuracion.editar está asignado exclusivamente al rol Admin', function () {
+    $rolesConEditar = Role::permission('configuracion.editar')->pluck('name')->sort()->values()->all();
+
+    expect($rolesConEditar)->toBe(['Admin']);
+});
+
+it('ningún rol no-Admin (legacy incluido) tiene configuracion.editar/ver; Auditor solo lectura', function () {
+    foreach (['Almacen', 'Ventas', 'Operador', 'Consulta'] as $rol) {
+        $rolModelo = Role::findByName($rol, 'web');
+        expect($rolModelo->hasPermissionTo('configuracion.editar'))->toBeFalse();
+        expect($rolModelo->hasPermissionTo('configuracion.ver'))->toBeFalse();
+    }
+
+    $auditor = Role::findByName('Auditor', 'web');
+    expect($auditor->hasPermissionTo('configuracion.ver'))->toBeTrue();
+    expect($auditor->hasPermissionTo('configuracion.editar'))->toBeFalse();
+});
+
+it('Ventas y Almacen reciben 403 en configuración (ver y editar)', function () {
+    foreach (['Ventas', 'Almacen'] as $rol) {
+        $user = User::factory()->create();
+        $user->assignRole($rol);
+
+        $this->actingAs($user)->get(route('configuracion.edit'))->assertForbidden();
+
+        $this->actingAs($user)
+            ->put(route('configuracion.update'), [
+                'empresa_nombre' => 'Hackeada',
+                'ticket_ancho' => 80,
+            ])
+            ->assertForbidden();
+    }
+});
+
+it('el guard server-side rechaza otorgar configuracion.editar a un rol no Admin', function () {
+    ConfiguracionAcceso::assertRolesSeguros([
+        'Admin' => ['configuracion.ver', 'configuracion.editar'],
+        'Auditor' => ['configuracion.ver'],
+        'Ventas' => [],
+        'Almacen' => [],
+    ]);
+
+    expect(fn () => ConfiguracionAcceso::assertRolesSeguros([
+        'Admin' => ['configuracion.ver', 'configuracion.editar'],
+        'Ventas' => ['configuracion.editar'],
+    ]))->toThrow(\InvalidArgumentException::class);
+
+    expect(fn () => ConfiguracionAcceso::assertRolConPermisoEditarSeguro('Auditor', ['configuracion.ver']))
+        ->not->toThrow(\InvalidArgumentException::class);
+
+    expect(fn () => ConfiguracionAcceso::assertRolConPermisoEditarSeguro('Consulta', ['configuracion.editar']))
+        ->toThrow(\InvalidArgumentException::class);
+});
+
+it('la administración de usuarios sincroniza roles y nunca permisos directos ni escalamiento', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin');
+
+    // Intento de escalamiento: inyecta configuracion.editar en el payload.
+    $this->actingAs($admin)
+        ->post(route('admin.users.store'), [
+            'name' => 'Ventas Nuevo',
+            'email' => 'ventas-nuevo@example.com',
+            'password' => 'password-segura-123',
+            'roles' => ['Ventas'],
+            'configuracion.editar' => 'on',
+        ])
+        ->assertRedirect(route('admin.users.index'));
+
+    $nuevo = User::where('email', 'ventas-nuevo@example.com')->firstOrFail();
+    expect($nuevo->hasRole('Ventas'))->toBeTrue();
+    expect($nuevo->hasPermissionTo('configuracion.editar'))->toBeFalse();
+
+    $this->actingAs($nuevo)
+        ->put(route('configuracion.update'), [
+            'empresa_nombre' => 'Hackeada',
+            'ticket_ancho' => 80,
+        ])
+        ->assertForbidden();
 });
 
 it('el seeder es idempotente y no duplica roles ni permisos', function () {

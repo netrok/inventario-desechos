@@ -29,6 +29,13 @@ class Venta extends Model
     protected $fillable = [
         'folio',
         'user_id',
+        'cliente_id',
+        'cliente_codigo',
+        'cliente_nombre',
+        'cliente_rfc',
+        'cliente_telefono',
+        'cliente_email',
+        'cliente_tipo',
         'total',
         'forma_pago',
         'estado',
@@ -37,6 +44,7 @@ class Venta extends Model
 
     protected $casts = [
         'user_id' => 'integer',
+        'cliente_id' => 'integer',
         'total' => 'decimal:2',
     ];
 
@@ -57,6 +65,31 @@ class Venta extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function cliente(): BelongsTo
+    {
+        return $this->belongsTo(Cliente::class, 'cliente_id');
+    }
+
+    /**
+     * Presentación del cliente de la venta usando SIEMPRE el snapshot
+     * histórico (nunca el Cliente actual, para no reescribir comprobantes).
+     */
+    public function getClienteHistoricoAttribute(): ?array
+    {
+        if ($this->cliente_nombre === null && $this->cliente_codigo === null) {
+            return null;
+        }
+
+        return [
+            'codigo' => $this->cliente_codigo,
+            'nombre' => $this->cliente_nombre,
+            'rfc' => $this->cliente_rfc,
+            'telefono' => $this->cliente_telefono,
+            'email' => $this->cliente_email,
+            'tipo' => $this->cliente_tipo,
+        ];
     }
 
     public function detalles(): HasMany

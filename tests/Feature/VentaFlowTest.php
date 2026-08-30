@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Cliente;
 use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\User;
@@ -38,6 +39,21 @@ function posSeller(): User
 function posItem(float $precio = 1250.5, string $estado = 'DISPONIBLE'): Item
 {
     return Item::create(['estado' => $estado, 'precio' => $precio]);
+}
+
+function posCliente(string $nombre = 'Cliente Test'): Cliente
+{
+    return Cliente::create(['nombre' => $nombre]);
+}
+
+function posSession(Item|array $items, ?Cliente $cliente = null): void
+{
+    $ids = $items instanceof Item ? [$items->id] : collect($items)->map(fn ($i) => $i->id)->all();
+
+    test()->session([
+        'pos.cart' => $ids,
+        'pos.cliente_id' => $cliente?->id ?? posCliente()->id,
+    ]);
 }
 
 /**
@@ -100,7 +116,7 @@ it('registra una venta simple de forma atomica', function () {
     $user = posSeller();
     $item = posItem(999.99);
 
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
 
     $response = $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$item->id],
@@ -145,7 +161,7 @@ it('registra una venta de varios equipos con el total calculado en el servidor',
     $b = posItem(250.5);
     $c = posItem(99.99);
 
-    $this->session(['pos.cart' => [$a->id, $b->id, $c->id]]);
+    posSession([$a, $b, $c]);
 
     $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$a->id, $b->id, $c->id],
@@ -172,7 +188,7 @@ it('ignora un total manipulado y usa siempre el importe real de la BD', function
     $a = posItem(100.0);
     $b = posItem(250.5);
 
-    $this->session(['pos.cart' => [$a->id, $b->id]]);
+    posSession([$a, $b]);
 
     $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$a->id, $b->id],
@@ -189,7 +205,7 @@ it('persiste el precio de BD en el detalle aunque se intente manipular', functio
     $user = posSeller();
     $item = posItem(777.77);
 
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
 
     $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$item->id],
@@ -285,7 +301,7 @@ it('un estado desconocido/corrupto en BD no es vendible ni por agregar ni por ch
     expect(session('pos.cart'))->toBeNull();
 
     // Checkout directo sobre el mismo equipo tampoco debe producir venta.
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
 
     $this->actingAs($user)
         ->post(route('pos.checkout'), [
@@ -308,7 +324,7 @@ it('el checkout aborta toda la venta cuando un equipo ya fue vendido', function 
     $user = posSeller();
     $vendido = posItem(300.0, 'VENDIDO');
 
-    $this->session(['pos.cart' => [$vendido->id]]);
+    posSession($vendido);
 
     $this->actingAs($user)
         ->post(route('pos.checkout'), [
@@ -327,7 +343,7 @@ it('el checkout aborta con BAJA y conserva el carrito', function () {
     $user = posSeller();
     $baja = posItem(300.0, 'BAJA');
 
-    $this->session(['pos.cart' => [$baja->id]]);
+    posSession($baja);
 
     $this->actingAs($user)
         ->post(route('pos.checkout'), [
@@ -346,7 +362,7 @@ it('hace rollback total si un equipo del carrito deja de ser vendible', function
     $a = posItem(100.0);          // válido
     $b = posItem(200.0, 'VENDIDO'); // inválido (vendido por otra vía)
 
-    $this->session(['pos.cart' => [$a->id, $b->id]]);
+    posSession([$a, $b]);
 
     $this->actingAs($user)
         ->post(route('pos.checkout'), [
@@ -374,7 +390,7 @@ it('un mismo equipo solo se puede vender una vez (segunda venta aborta)', functi
     $user = posSeller();
     $item = posItem(150.0);
 
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
     $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$item->id],
         'forma_pago' => 'EFECTIVO',
@@ -385,7 +401,7 @@ it('un mismo equipo solo se puede vender una vez (segunda venta aborta)', functi
 
     // Segundo usuario intenta vender el mismo equipo.
     $other = posSeller();
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
     $this->actingAs($other)->post(route('pos.checkout'), [
         'items' => [$item->id],
         'forma_pago' => 'TARJETA',
@@ -418,7 +434,7 @@ it('detecta cambios de estado ocurridos entre la lectura y el lock (lectura stal
         DB::table('items')->where('id', $item->id)->update(['estado' => 'VENDIDO']);
     });
 
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
 
     $this->actingAs($user)
         ->post(route('pos.checkout'), [
@@ -465,7 +481,7 @@ it('rechaza un carrito enviado que no coincide con la sesion', function () {
     $user = posSeller();
     $item = posItem();
 
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
 
     $this->actingAs($user)
         ->post(route('pos.checkout'), [
@@ -481,7 +497,7 @@ it('hace rollback completo cuando falla la creacion del Movimiento VENTA', funct
     $user = posSeller();
     $item = posItem(123.45);
 
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
 
     // Inyección de fallo: la creación de Movimiento falla en medio del checkout.
     Movimiento::creating(function () {
@@ -517,17 +533,28 @@ it('hace rollback completo cuando falla la creacion del Movimiento VENTA', funct
  * Unicidad de Item en venta_detalles (defensa a nivel BD)
  * =========================
  */
-it('la BD rechaza por UNIQUE que un item pertenezca a dos ventas', function () {
+it('un item SÍ puede pertenecer a ventas distintas (reventa histórica legítima)', function () {
     $ventaA = Venta::create(['user_id' => posSeller()->id, 'total' => 100, 'forma_pago' => 'EFECTIVO']);
     $ventaB = Venta::create(['user_id' => posSeller()->id, 'total' => 200, 'forma_pago' => 'TARJETA']);
+    $item = posItem(50.0);
+
+    $ventaA->detalles()->create(['item_id' => $item->id, 'precio' => $item->precio]);
+    $ventaB->detalles()->create(['item_id' => $item->id, 'precio' => 200]);
+
+    $this->assertDatabaseCount('venta_detalles', 2);
+    expect(VentaDetalle::query()->where('item_id', $item->id)->count())->toBe(2);
+});
+
+it('la BD impide por UNIQUE(venta_id, item_id) el mismo item dos veces en la misma venta', function () {
+    $ventaA = Venta::create(['user_id' => posSeller()->id, 'total' => 300, 'forma_pago' => 'EFECTIVO']);
     $item = posItem(50.0);
 
     $ventaA->detalles()->create(['item_id' => $item->id, 'precio' => $item->precio]);
 
     $threw = false;
     try {
-        DB::transaction(function () use ($ventaB, $item) {
-            $ventaB->detalles()->create(['item_id' => $item->id, 'precio' => 200]);
+        DB::transaction(function () use ($ventaA, $item) {
+            $ventaA->detalles()->create(['item_id' => $item->id, 'precio' => 200]);
         });
     } catch (\Illuminate\Database\QueryException $e) {
         $threw = true;
@@ -537,17 +564,39 @@ it('la BD rechaza por UNIQUE que un item pertenezca a dos ventas', function () {
     $this->assertDatabaseCount('venta_detalles', 1);
 });
 
-it('existe la constraint UNIQUE y la FK RESTRICT de venta_detalles.item_id', function () {
-    $unique = DB::selectOne("
+it('venta_detalles usa UNIQUE(venta_id,item_id) + INDEX(item_id) y ya no UNIQUE(item_id)', function () {
+    $idItem = DB::selectOne("
+        SELECT attnum FROM pg_attribute
+        WHERE attrelid = 'venta_detalles'::regclass AND attname = 'item_id'
+    ")->attnum;
+    $idVenta = DB::selectOne("
+        SELECT attnum FROM pg_attribute
+        WHERE attrelid = 'venta_detalles'::regclass AND attname = 'venta_id'
+    ")->attnum;
+
+    $compuesto = DB::selectOne("
         SELECT conname FROM pg_constraint
         WHERE conrelid = 'venta_detalles'::regclass
           AND contype = 'u'
-          AND conkey = ARRAY[
-              (SELECT attnum FROM pg_attribute
-               WHERE attrelid = 'venta_detalles'::regclass AND attname = 'item_id')
-          ]
+          AND conkey = ARRAY[$idVenta::smallint, $idItem::smallint]
     ");
-    expect($unique?->conname)->toBe('venta_detalles_item_id_unique');
+    expect($compuesto?->conname)->toBe('venta_detalles_venta_id_item_id_unique');
+
+    $global = DB::selectOne("
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'venta_detalles'::regclass
+          AND contype = 'u'
+          AND conkey = ARRAY[$idItem::smallint]
+    ");
+    expect($global)->toBeNull();
+
+    $indexItem = DB::selectOne("
+        SELECT indexname FROM pg_indexes
+        WHERE tablename = 'venta_detalles'
+          AND indexname = 'venta_detalles_item_id_index'
+        LIMIT 1
+    ");
+    expect($indexItem?->indexname)->toBe('venta_detalles_item_id_index');
 
     $fk = DB::selectOne("
         SELECT confdeltype FROM pg_constraint
@@ -568,7 +617,7 @@ it('suma 0.10 + 0.20 = 0.30 exacto y persiste el precio decimal de cada detalle'
     $a = posItem(0.1);
     $b = posItem(0.2);
 
-    $this->session(['pos.cart' => [$a->id, $b->id]]);
+    posSession([$a, $b]);
 
     $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$a->id, $b->id],
@@ -588,7 +637,7 @@ it('suma 19.99 + 29.99 + 49.99 = 99.97 exacto sin aproximacion', function () {
     $b = posItem(29.99);
     $c = posItem(49.99);
 
-    $this->session(['pos.cart' => [$a->id, $b->id, $c->id]]);
+    posSession([$a, $b, $c]);
 
     $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$a->id, $b->id, $c->id],
@@ -651,7 +700,7 @@ it('el listado de ventas muestra folio y total y el detalle enlaza los equipos',
     $user = posSeller();
     $item = posItem(555.0);
 
-    $this->session(['pos.cart' => [$item->id]]);
+    posSession($item);
     $this->actingAs($user)->post(route('pos.checkout'), [
         'items' => [$item->id],
         'forma_pago' => 'EFECTIVO',

@@ -1,19 +1,19 @@
 <nav x-data="{ open: false }"
      class="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
 
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 items-center justify-between">
             {{-- Left --}}
-            <div class="flex items-center gap-6">
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-2">
-                    <x-application-logo class="h-8 w-auto fill-current text-gray-900" />
+            <div class="flex items-center gap-4 xl:gap-6 min-w-0">
+                <a href="{{ route('dashboard') }}" class="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+                    <x-application-logo class="h-8 w-auto text-teal-800" />
                     <span class="hidden sm:inline text-sm font-semibold text-gray-900">
-                        Inventario Desechos
+                        Inventario ReUse
                     </span>
                 </a>
 
                 {{-- Desktop links --}}
-                <div class="hidden sm:flex items-center gap-1">
+                <div class="hidden sm:flex items-center gap-1 whitespace-nowrap">
                     @can('dashboard.ver')
                         <a href="{{ route('dashboard') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('dashboard') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
@@ -37,8 +37,8 @@
 
                     @can('ventas.crear')
                         <a href="{{ route('pos.index') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('pos.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                            Punto de venta
+                           class="flex-shrink-0 px-3 py-2 text-sm rounded-lg {{ request()->routeIs('pos.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            POS
                         </a>
                     @endcan
 
@@ -46,6 +46,13 @@
                         <a href="{{ route('ventas.index') }}"
                            class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('ventas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Ventas
+                        </a>
+                    @endcan
+
+                    @can('clientes.ver')
+                        <a href="{{ route('clientes.index') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('clientes.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Clientes
                         </a>
                     @endcan
 
@@ -72,8 +79,15 @@
 
                     @can('usuarios.ver')
                         <a href="{{ route('admin.users.index') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                            Admin / Usuarios
+                           class="flex-shrink-0 px-3 py-2 text-sm rounded-lg {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Usuarios
+                        </a>
+                    @endcan
+
+                    @can('configuracion.ver')
+                        <a href="{{ route('configuracion.edit') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('configuracion.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Configuración
                         </a>
                     @endcan
                 </div>
@@ -84,7 +98,7 @@
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button type="button"
-                                class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                class="flex-shrink-0 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 whitespace-nowrap hover:bg-gray-50">
                             <span class="font-medium">{{ Auth::user()->name }}</span>
                             <svg class="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -118,6 +132,8 @@
                         $showNew = true; $newUrl = route('categorias.create'); $newLabel = '+ Nueva';
                     } elseif (request()->routeIs('ubicaciones.*') && auth()->user()->can('ubicaciones.crear')) {
                         $showNew = true; $newUrl = route('ubicaciones.create'); $newLabel = '+ Nueva';
+                    } elseif (request()->routeIs('clientes.*') && auth()->user()->can('clientes.crear')) {
+                        $showNew = true; $newUrl = route('clientes.create'); $newLabel = '+ Nuevo';
                     }
                 @endphp
 
@@ -171,7 +187,7 @@
             @can('ventas.crear')
                 <a href="{{ route('pos.index') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('pos.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                    Punto de venta
+                    POS
                 </a>
             @endcan
 
@@ -179,6 +195,13 @@
                 <a href="{{ route('ventas.index') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('ventas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Ventas
+                </a>
+            @endcan
+
+            @can('clientes.ver')
+                <a href="{{ route('clientes.index') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('clientes.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Clientes
                 </a>
             @endcan
 
@@ -206,7 +229,14 @@
             @can('usuarios.ver')
                 <a href="{{ route('admin.users.index') }}"
                    class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('admin.users.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
-                    Admin / Usuarios
+                    Usuarios
+                </a>
+            @endcan
+
+            @can('configuracion.ver')
+                <a href="{{ route('configuracion.edit') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('configuracion.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Configuración
                 </a>
             @endcan
 
@@ -221,6 +251,8 @@
                     $mobileNewUrl = route('categorias.create'); $mobileNewLabel = '+ Nueva';
                 } elseif (request()->routeIs('ubicaciones.*') && auth()->user()->can('ubicaciones.crear')) {
                     $mobileNewUrl = route('ubicaciones.create'); $mobileNewLabel = '+ Nueva';
+                } elseif (request()->routeIs('clientes.*') && auth()->user()->can('clientes.crear')) {
+                    $mobileNewUrl = route('clientes.create'); $mobileNewLabel = '+ Nuevo';
                 }
             @endphp
 

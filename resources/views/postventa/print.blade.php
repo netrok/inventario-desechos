@@ -89,6 +89,10 @@
                     <div class="datos-wrap"><span class="k">Reembolso</span><span class="v">{{ $documento->forma_reembolso }}</span></div>
                 @endif
                 <div class="datos-wrap"><span class="k">Estado venta</span><span class="v">{{ $documento->venta->estado }}</span></div>
+                @if($documento->venta->cliente_historico)
+                    @php $ch = $documento->venta->cliente_historico; @endphp
+                    <div class="datos-wrap"><span class="k">Cliente</span><span class="v">{{ $ch['nombre'] }} (@if($ch['rfc']){{ $ch['rfc'] }}@else{{ $ch['codigo'] }}@endif)</span></div>
+                @endif
             </div>
 
             @foreach($documento->detalles as $detalle)
@@ -117,7 +121,7 @@
 
             <div class="pie">
                 <span class="folio">{{ $documento->folio }}</span><br>
-                Inventario Desechos — postventa
+                Inventario ReUse — postventa
             </div>
         </div>
     </div>

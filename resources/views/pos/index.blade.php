@@ -18,7 +18,7 @@
     </x-slot>
 
     <div class="py-6">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-5">
+        <div class="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-5">
 
             @if(session('success'))
                 <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -118,7 +118,96 @@
                 </div>
 
                 {{-- Panel confirmación --}}
-                <div class="lg:col-span-2">
+                <div class="lg:col-span-2 space-y-5">
+                    {{-- Panel cliente --}}
+                    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <div class="border-b border-gray-100 px-5 py-4">
+                            <h3 class="text-sm font-semibold text-gray-900">Cliente</h3>
+                            <p class="mt-0.5 text-xs text-gray-500">Requerido para registrar la venta.</p>
+                        </div>
+
+                        <div class="px-5 py-4 space-y-3">
+                            @if($cliente)
+                                <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-semibold text-gray-900">{{ $cliente->nombre }}</div>
+                                            <div class="text-xs text-gray-500">{{ $cliente->codigo }} · {{ $cliente->tipo }}</div>
+                                            @if($cliente->rfc) <div class="text-xs text-gray-400">RFC {{ $cliente->rfc }}</div> @endif
+                                            @if($cliente->telefono) <div class="text-xs text-gray-400">Tel. {{ $cliente->telefono }}</div> @endif
+                                        </div>
+                                        <form method="POST" action="{{ route('pos.cliente.limpiar') }}">
+                                            @csrf
+                                            <button type="submit"
+                                                    class="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                                                Cambiar
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            @else
+                                <div data-buscar-cliente class="space-y-2">
+                                    <input
+                                        id="buscar-cliente"
+                                        type="search"
+                                        data-input-cliente
+                                        placeholder="Buscar por nombre, teléfono, RFC o código…"
+                                        autocomplete="off"
+                                        role="combobox"
+                                        aria-expanded="false"
+                                        aria-controls="resultados-cliente"
+                                        aria-autocomplete="list"
+                                        aria-label="Buscar cliente"
+                                        class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900"
+                                    >
+                                    <p data-estado-cliente role="status" aria-live="polite" class="text-xs text-gray-500" style="min-height:1rem"></p>
+                                    <div id="resultados-cliente" data-resultados-cliente role="listbox" aria-label="Resultados de cliente" class="max-h-40 overflow-auto space-y-1"></div>
+
+                                    {{-- Selección segura: POST a pos.cliente (sesión). Nunca apunta al endpoint JSON. --}}
+                                    <form method="POST" action="{{ route('pos.cliente') }}" data-form-seleccionar>
+                                        @csrf
+                                        <input type="hidden" name="cliente_id" data-seleccion-cliente>
+                                    </form>
+
+                                    <button type="button" data-nuevo-cliente
+                                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50">
+                                        + Nuevo cliente al vuelo
+                                    </button>
+
+                                    <form method="POST" action="{{ route('clientes.rapida') }}" data-rapida-cliente hidden class="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                        @csrf
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <select name="tipo" class="rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900">
+                                                @foreach(\App\Models\Cliente::TIPOS as $tipo)
+                                                    <option value="{{ $tipo }}">{{ $tipo }}</option>
+                                                @endforeach
+                                            </select>
+                                            <input type="text" name="nombre" placeholder="Nombre *" required
+                                                   class="rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900">
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input type="text" name="rfc" placeholder="RFC (opcional)" maxlength="20"
+                                                   class="rounded-lg border-gray-300 text-xs uppercase focus:border-gray-900 focus:ring-gray-900">
+                                            <input type="text" name="telefono" placeholder="Teléfono (opcional)" maxlength="30"
+                                                   class="rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900">
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button type="submit"
+                                                    class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black">
+                                                Crear y seleccionar
+                                            </button>
+                                            <button type="button" data-cancelar-rapida
+                                                    class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50">
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    @if($cliente)
                     <div class="rounded-2xl border border-gray-200 bg-white shadow-sm sticky top-20">
                         <div class="border-b border-gray-100 px-5 py-4">
                             <h3 class="text-sm font-semibold text-gray-900">Confirmar venta</h3>
@@ -175,8 +264,156 @@
                             @endcan
                         </div>
                     </div>
+                    @endif
                 </div>
             </div>
         </div>
     </div>
+
+    @push('scripts')
+    <script>
+    (() => {
+        const input = document.querySelector('[data-input-cliente]');
+        const resultados = document.querySelector('[data-resultados-cliente]');
+        const estado = document.querySelector('[data-estado-cliente]');
+        const seleccionForm = document.querySelector('[data-form-seleccionar]');
+        const seleccionInput = document.querySelector('[data-seleccion-cliente]');
+        const rapidaForm = document.querySelector('[data-rapida-cliente]');
+        const nuevoClienteBtn = document.querySelector('[data-nuevo-cliente]');
+        if (!input) return;
+
+        const url = @json(route('clientes.search'));
+        let timeout;
+        let aborter = null;
+
+        function setEstado(msg, cls) {
+            estado.textContent = msg || '';
+            estado.className = 'text-xs ' + (cls || 'text-gray-500');
+        }
+
+        function pintarResultados(clientes) {
+            resultados.replaceChildren();
+            input.setAttribute('aria-expanded', 'false');
+
+            if (!clientes.length) {
+                setEstado('Sin resultados');
+                return;
+            }
+
+            setEstado('');
+            input.setAttribute('aria-expanded', 'true');
+
+            for (const c of clientes) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.role = 'option';
+                btn.className = 'w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900';
+
+                const nombre = document.createElement('span');
+                nombre.className = 'font-semibold text-gray-900';
+                nombre.textContent = c.nombre;
+
+                const meta = document.createElement('span');
+                meta.className = 'text-xs text-gray-500';
+                meta.textContent = c.codigo + (c.rfc ? ' · ' + c.rfc : '') + (c.telefono ? ' · Tel. ' + c.telefono : '');
+
+                btn.append(nombre);
+                btn.appendChild(document.createTextNode(' '));
+                btn.append(meta);
+
+                btn.addEventListener('click', () => seleccionar(c.id));
+                resultados.appendChild(btn);
+            }
+        }
+
+        async function buscar(q) {
+            if (aborter) aborter.abort();
+            aborter = new AbortController();
+            setEstado('Buscando…');
+
+            try {
+                const res = await fetch(url + '?q=' + encodeURIComponent(q), {
+                    headers: { 'Accept': 'application/json' },
+                    signal: aborter.signal,
+                });
+                if (!res.ok) throw new Error('http');
+                const data = await res.json();
+                pintarResultados(data.clientes || []);
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                resultados.replaceChildren();
+                setEstado('No se pudo buscar. Intenta de nuevo.', 'text-rose-600');
+            }
+        }
+
+        function disparar() {
+            const q = input.value.trim();
+            clearTimeout(timeout);
+            if (q.length < 2) {
+                resultados.replaceChildren();
+                setEstado('');
+                input.setAttribute('aria-expanded', 'false');
+                return;
+            }
+            timeout = setTimeout(() => buscar(q), 250);
+        }
+
+        input.addEventListener('input', disparar);
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const q = input.value.trim();
+                if (q.length >= 2) buscar(q);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                resultados.replaceChildren();
+                setEstado('');
+                input.setAttribute('aria-expanded', 'false');
+                input.blur();
+            }
+        });
+
+        function seleccionar(id) {
+            seleccionInput.value = id;
+            resultados.replaceChildren();
+            setEstado('Seleccionando cliente…');
+            seleccionForm.submit();
+        }
+
+        nuevoClienteBtn.addEventListener('click', () => {
+            rapidaForm.hidden = !rapidaForm.hidden;
+            if (!rapidaForm.hidden) {
+                rapidaForm.querySelector('[name="nombre"]').focus();
+            } else {
+                nuevoClienteBtn.focus();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('[data-cancelar-rapida]')) return;
+            rapidaForm.reset();
+            rapidaForm.hidden = true;
+            nuevoClienteBtn.focus();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !rapidaForm.hidden) {
+                rapidaForm.hidden = true;
+                nuevoClienteBtn.focus();
+            }
+        });
+
+        rapidaForm.addEventListener('submit', () => {
+            const submitBtn = rapidaForm.querySelector('button[type="submit"]');
+            if (submitBtn && !submitBtn.disabled) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Creando…';
+            }
+        });
+    })();
+    </script>
+    @endpush
 </x-app-layout>

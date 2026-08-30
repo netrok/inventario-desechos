@@ -32,18 +32,25 @@
             line-height: 1.35;
         }
 
-        .ticket h1 {
+        .ticket .empresa {
             text-align: center;
             font-size: {{ $width === 58 ? '11px' : '13px' }};
             letter-spacing: 0.5px;
             text-transform: uppercase;
-            margin-bottom: 6px;
+            margin-bottom: 2px;
+        }
+
+        .ticket .empresa-extra {
+            text-align: center;
+            font-size: {{ $width === 58 ? '8px' : '10px' }};
+            color: #4b5563;
         }
 
         .datos { border-top: 1px dashed #9ca3af; border-bottom: 1px dashed #9ca3af; padding: 4px 0; margin-bottom: 6px; }
         .datos-wrap { display: flex; justify-content: space-between; gap: 6px; }
         .datos-wrap .k { font-weight: 700; }
         .datos-wrap .v { text-align: right; }
+        .datos .cliente-nombre { font-weight: 700; }
 
         .item { padding: 5px 0; border-bottom: 1px dotted #d1d5db; }
         .item .top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
@@ -59,7 +66,7 @@
         .notas { margin-top: 6px; }
         .notas .k { font-weight: 700; }
 
-        .pie { text-align: center; margin-top: 8px; color: #4b5563; letter-spacing: 0.3px; }
+        .pie { text-align: center; margin-top: 8px; color: #4b5563; letter-spacing: 0.3px; white-space: pre-line; }
         .pie .folio { font-weight: 700; color: #111827; }
 
         @media print {
@@ -82,13 +89,35 @@
 
     <div class="stage">
         <div class="ticket">
-            <h1>Comprobante de venta</h1>
+            <div class="empresa">{{ $configuracion['empresa_nombre'] ?: config('app.name', 'Inventario ReUse') }}</div>
+            @if($configuracion['empresa_rfc'])
+                <div class="empresa-extra">RFC {{ $configuracion['empresa_rfc'] }}</div>
+            @endif
+            @if($configuracion['empresa_direccion'])
+                <div class="empresa-extra">{{ $configuracion['empresa_direccion'] }}</div>
+            @endif
+            @if($configuracion['empresa_telefono'] || $configuracion['empresa_email'])
+                <div class="empresa-extra">
+                    {{ $configuracion['empresa_telefono'] }}{{ $configuracion['empresa_telefono'] && $configuracion['empresa_email'] ? ' · ' : '' }}{{ $configuracion['empresa_email'] }}
+                </div>
+            @endif
+
+            <h1 style="text-align:center; font-size:{{ $width === 58 ? '11px' : '13px' }}; letter-spacing:0.5px; text-transform:uppercase; margin:4px 0 6px;">Comprobante de venta</h1>
 
             <div class="datos">
                 <div class="datos-wrap"><span class="k">Folio</span><span class="v">{{ $venta->folio }}</span></div>
                 <div class="datos-wrap"><span class="k">Fecha</span><span class="v">{{ $venta->created_at->format('Y-m-d H:i') }}</span></div>
                 <div class="datos-wrap"><span class="k">Vendedor</span><span class="v">{{ $venta->user?->name ?? '—' }}</span></div>
                 <div class="datos-wrap"><span class="k">Forma de pago</span><span class="v">{{ $venta->forma_pago }}</span></div>
+
+                @if($venta->cliente_historico)
+                    @php $ch = $venta->cliente_historico; @endphp
+                    <div class="datos-wrap"><span class="k">Cliente</span><span class="v cliente-nombre">{{ $ch['nombre'] }}</span></div>
+                    @if($ch['rfc']) <div class="datos-wrap"><span class="k">RFC</span><span class="v">{{ $ch['rfc'] }}</span></div> @endif
+                    @if($ch['telefono']) <div class="datos-wrap"><span class="k">Teléfono</span><span class="v">{{ $ch['telefono'] }}</span></div> @endif
+                @else
+                    <div class="datos-wrap"><span class="k">Cliente</span><span class="v">No registrado (venta histórica)</span></div>
+                @endif
             </div>
 
             @foreach($venta->detalles as $detalle)
@@ -126,8 +155,21 @@
             <div class="pie">
                 <span class="folio">{{ $venta->folio }}</span><br>
                 Gracias por su compra
+                @if($configuracion['ticket_pie'])
+                    <br>{{ $configuracion['ticket_pie'] }}
+                @endif
             </div>
         </div>
     </div>
+
+    @if($autoprint)
+        <script>
+            window.addEventListener('load', function () {
+                setTimeout(function () {
+                    window.print();
+                }, 250);
+            });
+        </script>
+    @endif
 </body>
 </html>
