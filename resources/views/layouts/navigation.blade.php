@@ -51,8 +51,15 @@
 
                     @can('cajas.ver')
                         <a href="{{ route('cajas.index') }}"
-                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('cajas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('cajas.*') && ! request()->routeIs('cajas.gestion*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                             Caja
+                        </a>
+                    @endcan
+
+                    @can('cajas.configurar')
+                        <a href="{{ route('cajas.gestion') }}"
+                           class="px-3 py-2 text-sm rounded-lg {{ request()->routeIs('cajas.gestion*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                            Configurar cajas
                         </a>
                     @endcan
 
@@ -207,8 +214,15 @@
 
             @can('cajas.ver')
                 <a href="{{ route('cajas.index') }}"
-                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('cajas.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('cajas.*') && ! request()->routeIs('cajas.gestion*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                     Caja
+                </a>
+            @endcan
+
+            @can('cajas.configurar')
+                <a href="{{ route('cajas.gestion') }}"
+                   class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('cajas.gestion*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                    Configurar cajas
                 </a>
             @endcan
 

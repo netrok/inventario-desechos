@@ -277,6 +277,31 @@ Route::middleware(['auth'])->group(function () {
         ->name('cajas.index')
         ->middleware('permission:cajas.ver');
 
+    /**
+     * Gestión administrativa del MAESTRO de cajas (B14.3, cajas.configurar).
+     * Separada de sesiones/cortes. Sin DELETE: la baja es activa=false para
+     * conservar el historial de sesiones de la caja.
+     */
+    Route::get('cajas/gestion', [CajaController::class, 'gestion'])
+        ->name('cajas.gestion')
+        ->middleware('permission:cajas.configurar');
+
+    Route::get('cajas/gestion/crear', [CajaController::class, 'crearForm'])
+        ->name('cajas.gestion.crear')
+        ->middleware('permission:cajas.configurar');
+
+    Route::post('cajas/gestion', [CajaController::class, 'store'])
+        ->name('cajas.gestion.store')
+        ->middleware('permission:cajas.configurar');
+
+    Route::get('cajas/gestion/{caja}/editar', [CajaController::class, 'editarForm'])
+        ->name('cajas.gestion.editar')
+        ->middleware('permission:cajas.configurar');
+
+    Route::put('cajas/gestion/{caja}', [CajaController::class, 'update'])
+        ->name('cajas.gestion.update')
+        ->middleware('permission:cajas.configurar');
+
     Route::get('cajas/abrir', [CajaController::class, 'abrir'])
         ->name('cajas.abrir')
         ->middleware('permission:cajas.abrir');

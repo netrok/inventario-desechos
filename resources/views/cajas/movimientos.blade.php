@@ -59,35 +59,30 @@
             @endif
 
             {{-- Resumen de la sesión --}}
-            <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <div class="rounded-2xl border border-gray-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Estado</p>
-                    <p class="mt-1 text-lg font-bold {{ $sesion->estaAbierta() ? 'text-emerald-600' : 'text-gray-800' }}">{{ $sesion->estado }}</p>
-                </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Apertura</p>
-                    <p class="mt-1 text-lg font-bold text-gray-800">{{ $sesion->opened_at?->format('d/m/Y H:i') }}</p>
-                </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Operador</p>
-                    <p class="mt-1 text-lg font-bold text-gray-800">{{ $sesion->usuarioApertura?->name }}</p>
-                </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Fondo inicial</p>
-                    <p class="mt-1 text-lg font-bold text-gray-800">{{ number_format((float) $sesion->fondo_inicial, 2) }}</p>
-                </div>
-                @if($sesion->estaAbierta())
-                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-500">Efectivo esperado</p>
-                        <p class="mt-1 text-lg font-bold text-emerald-800">{{ number_format((float) $esperado / 100, 2) }}</p>
-                    </div>
-                @else
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="rounded-2xl border border-gray-200 bg-white p-4">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Cierre</p>
-                        <p class="mt-1 text-lg font-bold text-gray-800">{{ $sesion->closed_at?->format('d/m/Y H:i') }}</p>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Estado</p>
+                        <p class="mt-1 text-lg font-bold {{ $sesion->estaAbierta() ? 'text-emerald-600' : 'text-gray-800' }}">{{ $sesion->estado }}</p>
                     </div>
-                @endif
-            </div>
+                    <div class="rounded-2xl border border-gray-200 bg-white p-4">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Apertura</p>
+                        <p class="mt-1 text-lg font-bold text-gray-800">{{ $sesion->opened_at?->format('d/m/Y H:i') }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-gray-200 bg-white p-4">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Operador</p>
+                        <p class="mt-1 text-lg font-bold text-gray-800">{{ $sesion->usuarioApertura?->name }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-gray-200 bg-white p-4">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Fondo inicial</p>
+                        <p class="mt-1 text-lg font-bold text-gray-800">{{ number_format((float) $sesion->fondo_inicial, 2) }}</p>
+                    </div>
+                    @if(! $sesion->estaAbierta())
+                        <div class="rounded-2xl border border-gray-200 bg-white p-4">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Cierre</p>
+                            <p class="mt-1 text-lg font-bold text-gray-800">{{ $sesion->closed_at?->format('d/m/Y H:i') }}</p>
+                        </div>
+                    @endif
+                </div>
 
             @if(! $sesion->estaAbierta())
                 {{-- Resultado del corte --}}
@@ -228,10 +223,12 @@
             <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 <div class="border-b border-gray-100 px-5 py-4 flex items-center justify-between">
                     <h3 class="text-sm font-semibold text-gray-900">Movimientos de efectivo ({{ $sesion->movimientos->count() }})</h3>
-                    <div class="text-xs text-gray-500 space-x-4">
-                        <span class="text-emerald-700">Entradas: {{ number_format($entradas / 100, 2) }}</span>
-                        <span class="text-rose-700">Salidas: {{ number_format($salidas / 100, 2) }}</span>
-                    </div>
+                    @if(! $sesion->estaAbierta())
+                        <div class="text-xs text-gray-500 space-x-4">
+                            <span class="text-emerald-700">Entradas: {{ number_format($entradas / 100, 2) }}</span>
+                            <span class="text-rose-700">Salidas: {{ number_format($salidas / 100, 2) }}</span>
+                        </div>
+                    @endif
                 </div>
 
                 <table class="min-w-full divide-y divide-gray-200 text-sm">

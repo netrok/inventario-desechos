@@ -62,6 +62,13 @@ class CajaService
         return DB::transaction(function () use ($caja, $user, $fondoCentavos, $observaciones) {
             $caja = Caja::query()->lockForUpdate()->findOrFail($caja->id);
 
+            // Revalidar bajo lock: la instancia exterior puede ser STALE. Una
+            // desactivación concurrente ya habría hecho commit; la fila
+            // bloqueada es la fuente de verdad, no el objeto pasado por el caller.
+            if (! $caja->activa) {
+                throw new DomainException("La caja {$caja->nombre} está inactiva y no puede abrirse.");
+            }
+
             if (SesionCaja::query()->where('caja_id', $caja->id)->abiertas()->exists()) {
                 throw new DomainException("La caja {$caja->nombre} ya tiene una sesión abierta.");
             }

@@ -11,6 +11,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
@@ -37,6 +38,99 @@ class CajaController extends Controller
         $abierta = $this->service->sesionAbiertaDe($user);
 
         return view('cajas.index', compact('sesiones', 'abierta', 'puedeVerTodas'));
+    }
+
+    /**
+     * Gestión administrativa de cajas físicas (B14.3, cajas.configurar).
+     *
+     * Es administración del MAESTRO de cajas, no de sesiones/cortes: listado,
+     * alta, edición y baja (activa=false). NO existe borrado operacional: una
+     * caja con historial nunca se elimina; la baja normal es desactivarla.
+     */
+    public function gestion()
+    {
+        $cajas = Caja::query()
+            ->with(['sesionesAbiertas.usuarioApertura'])
+            ->orderBy('codigo')
+            ->get();
+
+        return view('cajas.gestion', ['cajas' => $cajas]);
+    }
+
+    public function crearForm()
+    {
+        return view('cajas.gestion_crear', ['caja' => new Caja]);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $this->validarCaja($request);
+
+        $caja = Caja::create([
+            'nombre' => trim($data['nombre']),
+            'descripcion' => $this->normalizarDescripcion($data),
+            'activa' => ($data['activa'] ?? '1') ? true : false,
+        ]);
+
+        return redirect()->route('cajas.gestion')
+            ->with('success', "Caja {$caja->codigo} ({$caja->nombre}) creada.");
+    }
+
+    public function editarForm(Caja $caja)
+    {
+        $caja->load('sesionesAbiertas');
+
+        return view('cajas.gestion_editar', ['caja' => $caja]);
+    }
+
+    public function update(Request $request, Caja $caja)
+    {
+        $data = $this->validarCaja($request);
+
+        DB::transaction(function () use ($caja, $data) {
+            $caja = Caja::query()->lockForUpdate()->findOrFail($caja->id);
+
+            $activa = ($data['activa'] ?? '0') ? true : false;
+
+            // Regla de desactivación: una caja con sesión ABIERTA no se
+            // desactiva. Lock sobre la fila para serializar con la apertura
+            // (CajaService::abrirSesion también toma lockForUpdate de la caja).
+            if (! $activa && $caja->sesionesAbiertas()->exists()) {
+                throw ValidationException::withMessages([
+                    'activa' => 'No puedes desactivar una caja con una sesión abierta. Ciérrala antes de desactivarla.',
+                ]);
+            }
+
+            $caja->update([
+                'nombre' => trim($data['nombre']),
+                'descripcion' => $this->normalizarDescripcion($data),
+                'activa' => $activa,
+            ]);
+        });
+
+        return redirect()->route('cajas.gestion')
+            ->with('success', "Caja {$caja->codigo} actualizada.");
+    }
+
+    /**
+     * Validación compartida del maestro de cajas. El código se genera por
+     * secuencia (nunca se acepta del formulario): el campo `codigo` queda
+     * fuera de la validación y no llega al modelo.
+     */
+    private function validarCaja(Request $request): array
+    {
+        return $request->validate([
+            'nombre' => ['required', 'string', 'max:100'],
+            'descripcion' => ['nullable', 'string', 'max:1500'],
+            'activa' => ['sometimes', 'boolean'],
+        ]);
+    }
+
+    private function normalizarDescripcion(array $data): ?string
+    {
+        $descripcion = trim((string) ($data['descripcion'] ?? ''));
+
+        return $descripcion === '' ? null : $descripcion;
     }
 
     /**
@@ -82,6 +176,11 @@ class CajaController extends Controller
     /**
      * Movimientos de una sesión (cajas.movimientos). Solo la sesión propia,
      * salvo permiso de historial global.
+     *
+     * Corte ciego (B14.3): esta pantalla operativa JAMÁS calcula ni entrega el
+     * efectivo esperado mientras la sesión esté ABIERTA (ni al dueño ni a un
+     * Admin con ver_todas). Una vez cerrada, los valores se leen de las
+     * columnas persistidas (efectivo_esperado/contado/diferencia).
      */
     public function movimientos(SesionCaja $sesion)
     {
@@ -97,12 +196,19 @@ class CajaController extends Controller
             'arqueos.denominaciones',
         ]);
 
-        $esperado = $sesion->estaAbierta() ? $this->service->calcularEfectivoEsperado($sesion) : null;
-        $entradas = $sesion->movimientos->filter->esEntrada()->sum(fn ($m) => Money::aCentavos($m->monto));
-        $salidas = $sesion->movimientos->filter(fn ($m) => $m->esSalida() && $m->tipo !== 'CAMBIO_ENTREGADO')
-            ->sum(fn ($m) => Money::aCentavos($m->monto));
+        // Agregados derivados SOLO para sesiones CERRADAS. En una sesión todavía
+        // ABIERTA no se calculan ni se entregan (corte ciego): la vista no los
+        // muestra y el caller no recibe valores que pudieran filtrarse.
+        if ($sesion->estaAbierta()) {
+            $entradas = null;
+            $salidas = null;
+        } else {
+            $entradas = $sesion->movimientos->filter->esEntrada()->sum(fn ($m) => Money::aCentavos($m->monto));
+            $salidas = $sesion->movimientos->filter(fn ($m) => $m->esSalida() && $m->tipo !== 'CAMBIO_ENTREGADO')
+                ->sum(fn ($m) => Money::aCentavos($m->monto));
+        }
 
-        return view('cajas.movimientos', compact('sesion', 'esperado', 'entradas', 'salidas'));
+        return view('cajas.movimientos', compact('sesion', 'entradas', 'salidas'));
     }
 
     public function entrada(Request $request, SesionCaja $sesion)
