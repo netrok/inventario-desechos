@@ -11,6 +11,7 @@ use App\Models\SesionCaja;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Services\CajaService;
+use App\Support\ItemCodigo;
 use App\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -152,11 +153,13 @@ class PosController extends Controller
 
     /**
      * Agrega un equipo al carrito escaneando su código (ITM-000123).
-     * Normalización determinista: trim + uppercase + lookup exacto por codigo.
+     * Normalización determinista: ItemCodigo::normalizarLectura() (trim +
+     * uppercase y, para lecturas ITM, separadores equivalentes + 6 dígitos),
+     * con lookup exacto por Item.codigo.
      */
     public function add(Request $request)
     {
-        $codigo = strtoupper(trim((string) $request->get('codigo', '')));
+        $codigo = ItemCodigo::normalizarLectura($request->get('codigo'));
 
         if ($codigo === '' || mb_strlen($codigo) > 40) {
             throw ValidationException::withMessages([
