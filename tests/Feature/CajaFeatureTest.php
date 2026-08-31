@@ -1420,39 +1420,40 @@ it('B14.3 no existe borrado destructivo de cajas ni de su historial', function (
     expect($sesion->fresh()->caja_id)->toBe($caja->id);
 });
 
-it('B14.3 el enlace de navegación a configuración de cajas solo aparece con cajas.configurar', function () {
+it('B14.3 el enlace de navegación a administración de cajas solo aparece con cajas.configurar', function () {
     $this->actingAs(cajaAdmin())->get(route('cajas.index'))
         ->assertOk()
-        ->assertSee('Configurar cajas');
+        ->assertSee('Administración de cajas');
 
     $this->actingAs(cajaOperador())->get(route('cajas.index'))
         ->assertOk()
-        ->assertDontSee('Configurar cajas');
+        ->assertSee('Operación de caja')
+        ->assertDontSee('Administración de cajas');
 });
 
-it('B14.3 la navegación aísla Caja operativa de Configurar cajas en desktop y móvil', function () {
+it('B14.3 la navegación aísla Caja operativa de Administración de cajas en desktop y móvil', function () {
     $admin = cajaAdmin();
     cajaFisica();
 
-    // En index, "Caja" está activo y "Configurar cajas" no.
+    // En index, "Operación de caja" está activo y "Administración de cajas" no.
     $index = $this->actingAs($admin)->get(route('cajas.index'));
-    $index->assertOk()->assertSee('Configurar cajas');
+    $index->assertOk()->assertSee('Administración de cajas');
     $htmlIndex = $index->getContent();
 
-    preg_match('/<a[^>]*href="[^"]*\/cajas"[^>]*class="([^"]*)"[^>]*>\s*Caja\s*<\/a>/s', $htmlIndex, $cajaIndex);
-    preg_match('/<a[^>]*href="[^"]*\/cajas\/gestion"[^>]*class="([^"]*)"[^>]*>\s*Configurar cajas\s*<\/a>/s', $htmlIndex, $gestionIndex);
+    preg_match('/<a[^>]*href="[^"]*\/cajas"[^>]*class="([^"]*)"[^>]*>\s*Operación de caja\s*<\/a>/s', $htmlIndex, $cajaIndex);
+    preg_match('/<a[^>]*href="[^"]*\/cajas\/gestion"[^>]*class="([^"]*)"[^>]*>\s*Administración de cajas\s*<\/a>/s', $htmlIndex, $gestionIndex);
 
-    expect($cajaIndex[1] ?? '')->toContain('bg-gray-900 text-white');
-    expect($gestionIndex[1] ?? '')->not->toContain('bg-gray-900 text-white');
+    expect($cajaIndex[1] ?? '')->toContain('bg-gray-100 font-medium text-gray-900');
+    expect($gestionIndex[1] ?? '')->not->toContain('bg-gray-100 font-medium text-gray-900');
 
-    // En la gestión, se invierte: "Configurar cajas" activo y "Caja" NO.
+    // En la gestión, se invierte: "Administración de cajas" activo y "Operación de caja" NO.
     $gestion = $this->actingAs($admin)->get(route('cajas.gestion'));
     $gestion->assertOk();
     $htmlGestion = $gestion->getContent();
 
-    preg_match('/<a[^>]*href="[^"]*\/cajas"[^>]*class="([^"]*)"[^>]*>\s*Caja\s*<\/a>/s', $htmlGestion, $cajaGest);
-    preg_match('/<a[^>]*href="[^"]*\/cajas\/gestion"[^>]*class="([^"]*)"[^>]*>\s*Configurar cajas\s*<\/a>/s', $htmlGestion, $gestionGest);
+    preg_match('/<a[^>]*href="[^"]*\/cajas"[^>]*class="([^"]*)"[^>]*>\s*Operación de caja\s*<\/a>/s', $htmlGestion, $cajaGest);
+    preg_match('/<a[^>]*href="[^"]*\/cajas\/gestion"[^>]*class="([^"]*)"[^>]*>\s*Administración de cajas\s*<\/a>/s', $htmlGestion, $gestionGest);
 
-    expect($cajaGest[1] ?? '')->not->toContain('bg-gray-900 text-white');
-    expect($gestionGest[1] ?? '')->toContain('bg-gray-900 text-white');
+    expect($cajaGest[1] ?? '')->not->toContain('bg-gray-100 font-medium text-gray-900');
+    expect($gestionGest[1] ?? '')->toContain('bg-gray-100 font-medium text-gray-900');
 });

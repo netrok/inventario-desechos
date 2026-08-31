@@ -371,6 +371,18 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.inventory.pdf')
         ->middleware('permission:reportes.ver');
 
+    Route::get('reports/inventory-valued', [ReportController::class, 'inventoryValued'])
+        ->name('reports.inventory-valued')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory-valued.xlsx', [ReportController::class, 'inventoryValuedXlsx'])
+        ->name('reports.inventory-valued.xlsx')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory-valued.pdf', [ReportController::class, 'inventoryValuedPdf'])
+        ->name('reports.inventory-valued.pdf')
+        ->middleware('permission:reportes.ver');
+
     Route::get('reports/movimientos', [ReportController::class, 'movimientos'])
         ->name('reports.movimientos')
         ->middleware('permission:reportes.ver');

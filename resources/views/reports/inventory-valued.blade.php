@@ -1,22 +1,31 @@
 <x-app-layout>
+    @php
+        $fmt = function ($v) {
+            if ($v === null || $v === '') return '—';
+            return '$' . \App\Support\Money::formatear(\App\Support\Money::aPrecio(\App\Support\Money::aCentavos($v)));
+        };
+    @endphp
+
     <div class="py-6">
         <div class="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-8 space-y-5">
 
             {{-- Header --}}
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <h2 class="text-xl font-semibold text-gray-900 leading-tight">Inventario operativo</h2>
-                    <p class="mt-1 text-sm text-gray-600">
-                        Total: <span class="font-semibold text-gray-900">{{ $total }}</span> equipos
+                    <h2 class="text-xl font-semibold text-gray-900 leading-tight">Inventario valuado</h2>
+                    <p class="mt-1 text-sm text-gray-600">Valuación comercial estimada a precio de venta</p>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Este reporte utiliza el precio de venta actual registrado en cada equipo.
+                        No representa costo histórico, valor en libros ni valuación contable.
                     </p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <a href="{{ route('reports.inventory.xlsx', request()->query()) }}"
+                    <a href="{{ route('reports.inventory-valued.xlsx', request()->query()) }}"
                        class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                         XLSX
                     </a>
-                    <a href="{{ route('reports.inventory.pdf', request()->query()) }}"
+                    <a href="{{ route('reports.inventory-valued.pdf', request()->query()) }}"
                        class="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">
                         PDF
                     </a>
@@ -33,34 +42,49 @@
                 </div>
             @endif
 
-            {{-- Accesos rápidos (preaplican filtro estado) --}}
-            @php
-                $makeEstadoUrl = function ($estado) {
-                    $q = request()->query();
-                    if ($estado === '') unset($q['estado']); else $q['estado'] = $estado;
-                    return route('reports.inventory', $q);
-                };
-                $curEstado = $filters['estado'] ?? '';
-            @endphp
-
-            <div class="flex flex-wrap gap-2">
-                @foreach ([
-                    ['label' => 'Todos', 'key' => ''],
-                    ['label' => 'Disponibles', 'key' => 'DISPONIBLE'],
-                    ['label' => 'Vendidos', 'key' => 'VENDIDO'],
-                    ['label' => 'Bajas', 'key' => 'BAJA'],
-                ] as $qs)
-                    @php $active = ($qs['key'] === '' ? ($curEstado === '' || $curEstado === null) : $curEstado === $qs['key']); @endphp
-                    <a href="{{ $makeEstadoUrl($qs['key']) }}"
-                       class="rounded-full border px-4 py-1.5 text-sm font-medium {{ $active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' }}">
-                        {{ $qs['label'] }}
-                    </a>
-                @endforeach
+            {{-- KPIs --}}
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Equipos actuales</div>
+                    <div class="mt-1 text-2xl font-bold text-gray-900">{{ $kpis['equipos'] }}</div>
+                </div>
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Equipos con precio</div>
+                    <div class="mt-1 text-2xl font-bold text-emerald-700">{{ $kpis['con_precio'] }}</div>
+                </div>
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Equipos sin precio</div>
+                    <div class="mt-1 text-2xl font-bold text-gray-400">{{ $kpis['sin_precio'] }}</div>
+                </div>
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Precio cero</div>
+                    <div class="mt-1 text-2xl font-bold text-amber-600">{{ $kpis['precio_cero'] }}</div>
+                </div>
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Cobertura de valuación</div>
+                    <div class="mt-1 text-2xl font-bold text-gray-900">{{ number_format($kpis['cobertura'] * 100, 1) }}%</div>
+                </div>
+                <div class="rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-teal-700">Valor comercial registrado</div>
+                    <div class="mt-1 text-2xl font-bold text-teal-900">{{ $fmt($kpis['valor_comercial']) }}</div>
+                </div>
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Valor disponible/reservado</div>
+                    <div class="mt-1 text-xl font-bold text-gray-900">{{ $fmt($kpis['valor_disponible_reservado']) }}</div>
+                </div>
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Valor en revisión</div>
+                    <div class="mt-1 text-xl font-bold text-gray-900">{{ $fmt($kpis['valor_revision']) }}</div>
+                </div>
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div class="text-xs font-semibold text-gray-500">Valor en baja</div>
+                    <div class="mt-1 text-xl font-bold text-gray-900">{{ $fmt($kpis['valor_baja']) }}</div>
+                </div>
             </div>
 
             {{-- Filtros --}}
             <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                <form method="GET" action="{{ route('reports.inventory') }}"
+                <form method="GET" action="{{ route('reports.inventory-valued') }}"
                       class="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-end">
 
                     <div class="lg:col-span-2">
@@ -101,18 +125,6 @@
                     </div>
 
                     <div class="lg:col-span-2">
-                        <label class="block text-xs font-semibold text-gray-600">Alta desde</label>
-                        <input type="date" name="alta_desde" value="{{ $filters['alta_desde']?->format('Y-m-d') ?? '' }}"
-                               class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
-                    </div>
-
-                    <div class="lg:col-span-2">
-                        <label class="block text-xs font-semibold text-gray-600">Alta hasta</label>
-                        <input type="date" name="alta_hasta" value="{{ $filters['alta_hasta']?->format('Y-m-d') ?? '' }}"
-                               class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
-                    </div>
-
-                    <div class="lg:col-span-2">
                         <label class="block text-xs font-semibold text-gray-600">Marca</label>
                         <input name="marca" value="{{ $filters['marca'] ?? '' }}" placeholder="Dell, HP…"
                                class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
@@ -124,10 +136,44 @@
                                class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
                     </div>
 
-                    <div class="lg:col-span-12">
+                    <div class="lg:col-span-3">
                         <label class="block text-xs font-semibold text-gray-600">Serie</label>
                         <input name="serie" value="{{ $filters['serie'] ?? '' }}" placeholder="SN-…"
-                               class="mt-1 block w-full max-w-md rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
+                               class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
+                    </div>
+
+                    <div class="lg:col-span-3">
+                        <label class="block text-xs font-semibold text-gray-600">Alta desde</label>
+                        <input type="date" name="alta_desde" value="{{ $filters['alta_desde']?->format('Y-m-d') ?? '' }}"
+                               class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
+                    </div>
+
+                    <div class="lg:col-span-3">
+                        <label class="block text-xs font-semibold text-gray-600">Alta hasta</label>
+                        <input type="date" name="alta_hasta" value="{{ $filters['alta_hasta']?->format('Y-m-d') ?? '' }}"
+                               class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
+                    </div>
+
+                    <div class="lg:col-span-3">
+                        <label class="block text-xs font-semibold text-gray-600">Estado de precio</label>
+                        <select name="estado_precio" class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900">
+                            <option value="">Todos</option>
+                            <option value="con_precio" @selected(($filters['estado_precio'] ?? '') === 'con_precio')>Con precio</option>
+                            <option value="sin_precio" @selected(($filters['estado_precio'] ?? '') === 'sin_precio')>Sin precio</option>
+                            <option value="precio_cero" @selected(($filters['estado_precio'] ?? '') === 'precio_cero')>Precio cero</option>
+                        </select>
+                    </div>
+
+                    <div class="lg:col-span-3">
+                        <label class="block text-xs font-semibold text-gray-600">Precio mínimo</label>
+                        <input type="number" step="0.01" min="0" name="precio_min" value="{{ $filters['precio_min'] ?? '' }}"
+                               class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
+                    </div>
+
+                    <div class="lg:col-span-3">
+                        <label class="block text-xs font-semibold text-gray-600">Precio máximo</label>
+                        <input type="number" step="0.01" min="0" name="precio_max" value="{{ $filters['precio_max'] ?? '' }}"
+                               class="mt-1 w-full rounded-lg border-gray-200 focus:border-gray-900 focus:ring-gray-900" />
                     </div>
 
                     <div class="lg:col-span-12 flex items-center justify-between pt-1">
@@ -140,7 +186,7 @@
                             <button class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">
                                 Filtrar
                             </button>
-                            <a href="{{ route('reports.inventory') }}"
+                            <a href="{{ route('reports.inventory-valued') }}"
                                class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                                 Limpiar
                             </a>
@@ -149,7 +195,44 @@
                 </form>
             </div>
 
-            {{-- Tabla --}}
+            {{-- Agrupaciones --}}
+            <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                @foreach ([
+                    ['title' => 'Por estado', 'rows' => $agrupaciones['estado']],
+                    ['title' => 'Por categoría', 'rows' => $agrupaciones['categoria']],
+                    ['title' => 'Por ubicación', 'rows' => $agrupaciones['ubicacion']],
+                ] as $block)
+                    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <div class="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-gray-900">{{ $block['title'] }}</div>
+                        <table class="w-full divide-y divide-gray-100">
+                            <thead class="bg-gray-50 text-left text-xs font-semibold text-gray-600">
+                                <tr>
+                                    <th class="px-4 py-2">Grupo</th>
+                                    <th class="px-2 py-2 text-right">Equipos</th>
+                                    <th class="px-2 py-2 text-right">Valuados</th>
+                                    <th class="px-4 py-2 text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 text-sm">
+                                @forelse($block['rows'] as $r)
+                                    <tr>
+                                        <td class="px-4 py-2 text-gray-800">{{ $r['grupo'] }}</td>
+                                        <td class="px-2 py-2 text-right text-gray-800">{{ $r['equipos'] }}</td>
+                                        <td class="px-2 py-2 text-right text-gray-600">{{ $r['con_precio'] }}</td>
+                                        <td class="px-4 py-2 text-right font-medium text-gray-900">{{ $fmt($r['valor']) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="px-4 py-4 text-center text-sm text-gray-500">Sin datos</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                @endforeach
+            </div>
+
+            {{-- Detalle --}}
             <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -162,9 +245,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Serie</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Estado</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Ubicación</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Fecha de alta</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Precio de venta</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Notas</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Precio de venta</th>
                             </tr>
                         </thead>
 
@@ -175,7 +256,6 @@
                                         'DISPONIBLE' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
                                         'RESERVADO'  => 'bg-amber-50 text-amber-700 border-amber-200',
                                         'REPARACION', 'REPARACIÓN' => 'bg-blue-50 text-blue-700 border-blue-200',
-                                        'VENDIDO'    => 'bg-slate-100 text-slate-700 border-slate-200',
                                         'DEVUELTO'   => 'bg-indigo-50 text-indigo-700 border-indigo-200',
                                         'BAJA'       => 'bg-rose-50 text-rose-700 border-rose-200',
                                         default      => 'bg-gray-50 text-gray-700 border-gray-200',
@@ -199,21 +279,19 @@
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-800">{{ $item->ubicacion?->nombre ?? '—' }}</td>
-                                    <td class="px-4 py-3 text-sm text-gray-500">{{ optional($item->created_at)->format('Y-m-d') ?? '—' }}</td>
-                                    <td class="px-4 py-3 text-sm text-gray-800">
+                                    <td class="px-4 py-3 text-right text-sm font-medium text-gray-900">
                                         @if($item->precio === null)
-                                            —
+                                            <span class="text-gray-400">Sin precio</span>
+                                        @elseif(\App\Support\Money::aCentavos($item->precio) === 0)
+                                            <span class="text-amber-600 font-semibold">$0.00</span>
                                         @else
-                                            ${{ \App\Support\Money::formatear(\App\Support\Money::aPrecio(\App\Support\Money::aCentavos($item->precio))) }}
+                                            {{ $fmt($item->precio) }}
                                         @endif
-                                    </td>
-                                    <td class="px-4 py-3 text-sm text-gray-500 max-w-[160px] truncate" title="{{ $item->notas ?? '' }}">
-                                        {{ $item->notas ?: '—' }}
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="10" class="px-4 py-10 text-center">
+                                    <td colspan="8" class="px-4 py-10 text-center">
                                         <div class="text-sm font-semibold text-gray-900">Sin resultados</div>
                                         <div class="mt-1 text-sm text-gray-600">
                                             Prueba con otros filtros o limpia los filtros.
