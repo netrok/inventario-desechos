@@ -341,6 +341,7 @@ it('registra una devolucion parcial e ingresa el item a DEVUELTO', function () {
         'detalles' => [$detalleA->id],
         'motivo' => 'Equipo presenta falla funcional.',
         'forma_reembolso' => 'TARJETA',
+        'referencia_reembolso' => 'DEV-TARJETA-TEST',
     ])->assertRedirect();
 
     $doc = DocumentoPostventa::where('venta_id', $venta->id)->first();
@@ -375,6 +376,7 @@ it('registra una devolucion total y deja la venta en DEVUELTA', function () {
         'detalles' => $ids,
         'motivo' => 'Cliente devolvio todos los equipos.',
         'forma_reembolso' => 'TRANSFERENCIA',
+        'referencia_reembolso' => 'DEV-TRANSFER-TEST',
     ])->assertRedirect();
 
     $doc = DocumentoPostventa::first();
@@ -840,4 +842,249 @@ it('no elimina al usuario actor de un documento postventa y el documento persist
     $this->assertDatabaseHas('users', ['id' => $actor->id]);
     $this->assertDatabaseCount('documentos_postventa', 1);
     expect(DocumentoPostventa::find($doc->id)->user_id)->toBe($actor->id);
+});
+
+/**
+ * =========================
+ * B14.2 — REEMBOLSO POR FORMA ORIGINAL DE PAGO
+ * =========================
+ */
+it('B14.2 cancela venta mixta devolviendo exactamente por los pagos originales', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([10.00]);
+    $sesion = openCajaFor($admin);
+
+    $venta->update(['forma_pago' => 'MIXTO']);
+
+    $efectivo = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+        'monto_aplicado' => '8.00',
+        'efectivo_recibido' => '10.00',
+        'cambio_entregado' => '2.00',
+        'referencia' => null,
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '2.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-ORIGINAL',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 2,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->post(route('ventas.cancelar.store', $venta), [
+            'motivo' => 'Cancelación total de prueba mixta.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-TARJ-0001',
+            ],
+        ]);
+
+    $response->assertSessionHasNoErrors();
+
+    $documento = \App\Models\DocumentoPostventa::latest('id')->firstOrFail();
+
+    expect($documento->forma_reembolso)->toBeNull();
+
+    $reembolsos = \App\Models\ReembolsoPostventa::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->orderBy('orden')
+        ->get();
+
+    expect($reembolsos)->toHaveCount(2);
+
+    expect($reembolsos[0]->pago_venta_id)->toBe($efectivo->id);
+    expect($reembolsos[0]->metodo)->toBe('EFECTIVO');
+    expect($reembolsos[0]->monto)->toBe('8.00');
+
+    expect($reembolsos[1]->pago_venta_id)->toBe($tarjeta->id);
+    expect($reembolsos[1]->metodo)->toBe('TARJETA');
+    expect($reembolsos[1]->monto)->toBe('2.00');
+    expect($reembolsos[1]->referencia)->toBe('DEV-TARJ-0001');
+
+    $movimientoCaja = \App\Models\MovimientoCaja::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->where('tipo', \App\Models\MovimientoCaja::TIPO_REEMBOLSO_EFECTIVO)
+        ->first();
+
+    expect($movimientoCaja)->not->toBeNull();
+    expect($movimientoCaja->monto)->toBe('8.00');
+    expect($movimientoCaja->pago_venta_id)->toBe($efectivo->id);
+});
+
+it('B14.2 prorratea una devolucion parcial 80 20 y conserva trazabilidad', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([4.00, 6.00]);
+    $sesion = openCajaFor($admin);
+
+    $venta->update(['forma_pago' => 'MIXTO']);
+
+    $efectivo = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+        'monto_aplicado' => '8.00',
+        'efectivo_recibido' => '8.00',
+        'cambio_entregado' => '0.00',
+        'referencia' => null,
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '2.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-TARJETA',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 2,
+    ]);
+
+    $detalle = $venta->detalles()->orderBy('id')->firstOrFail();
+
+    $this->actingAs($admin)
+        ->post(route('ventas.devolver.store', $venta), [
+            'detalles' => [$detalle->id],
+            'motivo' => 'Devolución parcial B14.2.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-TARJ-PARCIAL-1',
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $documento = \App\Models\DocumentoPostventa::latest('id')->firstOrFail();
+
+    $reembolsos = \App\Models\ReembolsoPostventa::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->orderBy('orden')
+        ->get()
+        ->keyBy('pago_venta_id');
+
+    expect($reembolsos[$efectivo->id]->monto)->toBe('3.20');
+    expect($reembolsos[$tarjeta->id]->monto)->toBe('0.80');
+
+    $movimientoCaja = \App\Models\MovimientoCaja::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->where('tipo', \App\Models\MovimientoCaja::TIPO_REEMBOLSO_EFECTIVO)
+        ->firstOrFail();
+
+    expect($movimientoCaja->monto)->toBe('3.20');
+});
+
+it('B14.2 varias devoluciones terminan exactamente en la composicion original', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([4.00, 6.00]);
+    $sesion = openCajaFor($admin);
+
+    $venta->update(['forma_pago' => 'MIXTO']);
+
+    $efectivo = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+        'monto_aplicado' => '8.00',
+        'efectivo_recibido' => '8.00',
+        'cambio_entregado' => '0.00',
+        'referencia' => null,
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '2.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-TARJETA',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 2,
+    ]);
+
+    $detalles = $venta->detalles()->orderBy('id')->get();
+
+    $this->actingAs($admin)
+        ->post(route('ventas.devolver.store', $venta), [
+            'detalles' => [$detalles[0]->id],
+            'motivo' => 'Primera devolución B14.2.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-PARCIAL-A',
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($admin)
+        ->post(route('ventas.devolver.store', $venta->fresh()), [
+            'detalles' => [$detalles[1]->id],
+            'motivo' => 'Segunda devolución B14.2.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-PARCIAL-B',
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $totalEfectivo = \App\Models\ReembolsoPostventa::query()
+        ->where('pago_venta_id', $efectivo->id)
+        ->get()
+        ->sum(fn ($r) => \App\Support\Money::aCentavos($r->monto));
+
+    $totalTarjeta = \App\Models\ReembolsoPostventa::query()
+        ->where('pago_venta_id', $tarjeta->id)
+        ->get()
+        ->sum(fn ($r) => \App\Support\Money::aCentavos($r->monto));
+
+    expect($totalEfectivo)->toBe(800);
+    expect($totalTarjeta)->toBe(200);
+    expect($totalEfectivo + $totalTarjeta)->toBe(1000);
+});
+
+it('B14.2 exige referencia para revertir tarjeta', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([10.00]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => null,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '10.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-TARJETA',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('ventas.cancelar.store', $venta), [
+            'motivo' => 'Cancelación electrónica sin referencia.',
+        ])
+        ->assertSessionHasErrors('reembolso');
+
+    expect(
+        \App\Models\ReembolsoPostventa::where(
+            'pago_venta_id',
+            $tarjeta->id
+        )->exists()
+    )->toBeFalse();
+
+    expect($venta->fresh()->estado)->toBe(\App\Models\Venta::ESTADO_ACTIVA);
 });

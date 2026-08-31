@@ -125,20 +125,49 @@
     {{ $sesion->diferencia !== null ? number_format((float) $sesion->diferencia, 2) : '—' }}
 </td>
 <td class="px-5 py-3 text-right whitespace-nowrap">
-                                    @can('cajas.movimientos')
-                                        <a href="{{ route('cajas.movimientos', $sesion) }}"
-                                           class="text-sm font-semibold text-gray-900 hover:underline">
-                                            Ver
-                                        </a>
-                                    @endcan
-                                    @can('cajas.cerrar')
-                                        @if($sesion->estaAbierta() && $sesion->user_id_apertura === auth()->id())
-                                            <a href="{{ route('cajas.cerrar', $sesion) }}"
-                                               class="ms-3 text-sm font-semibold text-rose-700 hover:underline">
-                                                Cerrar
+                                    @if($sesion->estaAbierta())
+                                        @can('cajas.movimientos')
+                                            <a href="{{ route('cajas.movimientos', $sesion) }}"
+                                               class="text-sm font-semibold text-gray-900 hover:underline">
+                                                Ver movimientos
                                             </a>
-                                        @endif
-                                    @endcan
+                                        @endcan
+
+                                        @can('cajas.cerrar')
+                                            @if($sesion->user_id_apertura === auth()->id())
+                                                <a href="{{ route('cajas.cerrar', $sesion) }}"
+                                                   class="ms-3 text-sm font-semibold text-rose-700 hover:underline">
+                                                    Cerrar
+                                                </a>
+                                            @endif
+                                        @endcan
+                                    @else
+                                        @can('cajas.ver')
+                                            <div class="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
+                                                <a href="{{ route('cajas.corte', $sesion) }}"
+                                                   class="text-sm font-semibold text-gray-900 hover:underline">
+                                                    Ver corte
+                                                </a>
+
+                                                <a href="{{ route('cajas.corte.imprimir', $sesion) }}"
+                                                   target="_blank"
+                                                   rel="noopener"
+                                                   class="text-sm font-semibold text-indigo-700 hover:underline">
+                                                    Imprimir
+                                                </a>
+
+                                                <a href="{{ route('cajas.corte.pdf', $sesion) }}"
+                                                   class="text-sm font-semibold text-rose-700 hover:underline">
+                                                    PDF
+                                                </a>
+
+                                                <a href="{{ route('cajas.corte.xlsx', $sesion) }}"
+                                                   class="text-sm font-semibold text-emerald-700 hover:underline">
+                                                    XLSX
+                                                </a>
+                                            </div>
+                                        @endcan
+                                    @endif
                                 </td>
                             </tr>
                         @empty

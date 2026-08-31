@@ -69,6 +69,13 @@ class DocumentoPostventa extends Model
         return $this->hasMany(DocumentoPostventaDetalle::class, 'documento_postventa_id');
     }
 
+    public function reembolsos(): HasMany
+    {
+        return $this->hasMany(ReembolsoPostventa::class, 'documento_postventa_id')
+            ->orderBy('orden')
+            ->orderBy('id');
+    }
+
     public function esCancelacion(): bool
     {
         return $this->tipo === self::TIPO_CANCELACION;

@@ -487,37 +487,64 @@
                 quitar.addEventListener('click', () => { fila.remove(); renumerar(); recalcular(); });
                 cabecera.append(sel); cabecera.append(quitar);
 
+                const montoWrap = document.createElement('div');
+
+                const montoLabel = document.createElement('label');
+                montoLabel.className = 'mb-1 block text-[11px] font-medium text-gray-500';
+                montoLabel.textContent = 'Monto aplicado';
+
                 const montoSel = document.createElement('input');
                 montoSel.name = 'pagos[][monto_aplicado]';
                 montoSel.type = 'number';
                 montoSel.step = '0.01';
                 montoSel.min = '0';
-                montoSel.placeholder = 'Monto';
+                montoSel.placeholder = 'Monto aplicado a la venta';
+                montoSel.setAttribute('aria-label', 'Monto aplicado');
                 montoSel.required = true;
                 montoSel.className = 'w-full rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900';
 
+                montoWrap.append(montoLabel, montoSel);
+
                 const recibidoCont = document.createElement('div');
                 recibidoCont.className = 'hidden';
+
+                const recibidoLabel = document.createElement('label');
+                recibidoLabel.className = 'mb-1 block text-[11px] font-medium text-gray-500';
+                recibidoLabel.textContent = 'Efectivo recibido';
+
                 const recibido = document.createElement('input');
                 recibido.name = 'pagos[][efectivo_recibido]';
                 recibido.type = 'number';
                 recibido.step = '0.01';
                 recibido.min = '0';
-                recibido.placeholder = 'Efectivo recibido';
+                recibido.placeholder = 'Dinero entregado por el cliente';
+                recibido.setAttribute('aria-label', 'Efectivo recibido');
                 recibido.className = 'w-full rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900';
+
+                recibidoCont.append(recibidoLabel, recibido);
+
+                const referenciaWrap = document.createElement('div');
+                referenciaWrap.className = 'hidden';
+
+                const referenciaLabel = document.createElement('label');
+                referenciaLabel.className = 'mb-1 block text-[11px] font-medium text-gray-500';
+                referenciaLabel.textContent = 'Referencia';
 
                 const referencia = document.createElement('input');
                 referencia.name = 'pagos[][referencia]';
                 referencia.type = 'text';
                 referencia.maxLength = '100';
-                referencia.placeholder = 'Referencia (tarjeta/transferencia)';
-                referencia.className = 'w-full rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900 hidden';
+                referencia.placeholder = 'Últimos dígitos, autorización o referencia';
+                referencia.setAttribute('aria-label', 'Referencia de pago');
+                referencia.className = 'w-full rounded-lg border-gray-300 text-xs focus:border-gray-900 focus:ring-gray-900';
+
+                referenciaWrap.append(referenciaLabel, referencia);
 
                 function toggleCampos() {
                     const esEfectivo = sel.value === 'EFECTIVO';
                     recibidoCont.classList.toggle('hidden', !esEfectivo);
                     recibido.required = esEfectivo;
-                    referencia.classList.toggle('hidden', esEfectivo);
+                    referenciaWrap.classList.toggle('hidden', esEfectivo);
                     referencia.required = !esEfectivo && FILAS_NETAS.includes(sel.value);
                     if (!esEfectivo && recibido.value !== '') recibido.value = '';
                     recalcular();
@@ -527,8 +554,7 @@
                 recibido.addEventListener('input', recalcular);
                 montoSel.addEventListener('input', recalcular);
 
-                recibidoCont.append(recibido);
-                fila.append(cabecera, montoSel, recibidoCont, referencia);
+                fila.append(cabecera, montoWrap, recibidoCont, referenciaWrap);
                 fila._campos = { sel, montoSel, recibido, referencia };
                 toggleCampos();
                 return fila;
@@ -563,13 +589,18 @@
 
             function recalcular() {
                 let aplicado = 0;
+                let efectivoAplicado = 0;
                 let efectivoRecibido = 0;
 
                 cont.querySelectorAll(':scope > .rounded-lg.border').forEach((fila) => {
                     const c = fila._campos;
                     if (!c) return;
-                    aplicado += MoneyCentavos(c.montoSel.value);
+
+                    const montoAplicado = MoneyCentavos(c.montoSel.value);
+                    aplicado += montoAplicado;
+
                     if (c.sel.value === 'EFECTIVO') {
+                        efectivoAplicado += montoAplicado;
                         efectivoRecibido += MoneyCentavos(c.recibido.value);
                     }
                 });
@@ -589,8 +620,8 @@
                 } else {
                     estadoPagos.textContent = '';
                     estadoPagos.className = 'mt-1 text-xs text-gray-500';
-                    if (efectivoRecibido >= aplicado && efectivoRecibido > 0) {
-                        const cambio = efectivoRecibido - aplicado;
+                    if (efectivoAplicado > 0 && efectivoRecibido >= efectivoAplicado) {
+                        const cambio = efectivoRecibido - efectivoAplicado;
                         cambioTotal.textContent = fmt(cambio);
                         cambioCont.classList.toggle('hidden', cambio <= 0);
                     } else {

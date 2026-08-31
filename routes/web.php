@@ -301,6 +301,14 @@ Route::middleware(['auth'])->group(function () {
         ->name('cajas.retiro')
         ->middleware('permission:cajas.retiro');
 
+    Route::get('cajas/sesiones/{sesion}/corte', [CajaController::class, 'corte'])
+        ->name('cajas.corte')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/sesiones/{sesion}/imprimir', [CajaController::class, 'corteImprimir'])
+        ->name('cajas.corte.imprimir')
+        ->middleware('permission:cajas.ver');
+
     Route::get('cajas/sesiones/{sesion}/pdf', [CajaController::class, 'cortePdf'])
         ->name('cajas.corte.pdf')
         ->middleware('permission:cajas.ver');

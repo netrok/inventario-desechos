@@ -87,7 +87,7 @@
 <body>
     <div class="no-print">
         <button type="button" class="print" onclick="window.print()">Imprimir</button>
-        <button type="button" onclick="window.close()">Cerrar</button>
+        <button type="button" onclick="cerrarTicket()">Cerrar</button>
         <a href="{{ route('ventas.show', $venta) }}">← Volver al detalle</a>
         @if($errors->any())
             <span style="color:#fca5a5">{{ $errors->first() }}</span>
@@ -192,6 +192,21 @@
             </div>
         </div>
     </div>
+
+    <script>
+        function cerrarTicket() {
+            // Si el ticket se abrió desde otra ventana/pestaña de la app,
+            // cerramos solamente el ticket.
+            if (window.opener && !window.opener.closed) {
+                window.close();
+                return;
+            }
+
+            // Si estamos en la pestaña principal, nunca cerramos la app:
+            // regresamos al detalle de la venta.
+            window.location.href = @json(route('ventas.show', $venta));
+        }
+    </script>
 
     @if($autoprint)
         <script>

@@ -29,15 +29,145 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('ventas.devolver.store', $venta) }}" class="space-y-5"
-                  x-data="{
-                        total: 0,
+            <script>
+                window.devolucionPostventa = function () {
+                    return {
+                        totalCentavos: 0,
+
+                        pagos: @json($pagosReembolsoUi),
+
                         updateTotal() {
-                            const form = this.$el;
-                            this.total = [...form.querySelectorAll('input[name=&quot;detalles[]&quot;]:checked')]
-                                .reduce((acc, cb) => acc + Number(cb.dataset.importe), 0);
+                            const checks = [
+                                ...this.$el.querySelectorAll(
+                                    'input[name="detalles[]"]:checked'
+                                )
+                            ];
+
+                            this.totalCentavos = checks.reduce(
+                                (acc, cb) =>
+                                    acc + Number(cb.dataset.centavos || 0),
+                                0
+                            );
+                        },
+
+                        money(centavos) {
+                            return (Number(centavos) / 100).toLocaleString(
+                                'es-MX',
+                                {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                }
+                            );
+                        },
+
+                        reembolsoPago(pagoId) {
+                            if (
+                                this.totalCentavos <= 0 ||
+                                this.pagos.length === 0
+                            ) {
+                                return 0;
+                            }
+
+                            const totalOriginal = this.pagos.reduce(
+                                (acc, p) =>
+                                    acc + BigInt(p.monto_centavos),
+                                0n
+                            );
+
+                            const totalAnterior = this.pagos.reduce(
+                                (acc, p) =>
+                                    acc + BigInt(
+                                        p.ya_reembolsado_centavos
+                                    ),
+                                0n
+                            );
+
+                            const objetivo =
+                                totalAnterior +
+                                BigInt(this.totalCentavos);
+
+                            if (objetivo > totalOriginal) {
+                                return 0;
+                            }
+
+                            let sumaBases = 0n;
+
+                            const filas = this.pagos.map((p) => {
+                                const numerador =
+                                    objetivo *
+                                    BigInt(p.monto_centavos);
+
+                                const base =
+                                    numerador / totalOriginal;
+
+                                const resto =
+                                    numerador % totalOriginal;
+
+                                sumaBases += base;
+
+                                return {
+                                    id: Number(p.id),
+                                    orden: Number(p.orden),
+                                    base: base,
+                                    resto: resto,
+                                    anterior: BigInt(
+                                        p.ya_reembolsado_centavos
+                                    )
+                                };
+                            });
+
+                            const pendientes =
+                                Number(objetivo - sumaBases);
+
+                            filas.sort((a, b) => {
+                                if (a.resto !== b.resto) {
+                                    return a.resto > b.resto
+                                        ? -1
+                                        : 1;
+                                }
+
+                                if (a.orden !== b.orden) {
+                                    return a.orden - b.orden;
+                                }
+
+                                return a.id - b.id;
+                            });
+
+                            for (
+                                let i = 0;
+                                i < pendientes;
+                                i++
+                            ) {
+                                filas[i].base += 1n;
+                            }
+
+                            const fila = filas.find(
+                                (f) =>
+                                    f.id === Number(pagoId)
+                            );
+
+                            if (!fila) {
+                                return 0;
+                            }
+
+                            const nuevo =
+                                fila.base - fila.anterior;
+
+                            return nuevo > 0n
+                                ? Number(nuevo)
+                                : 0;
                         }
-                  }">
+                    };
+                };
+            </script>
+
+            <form
+                method="POST"
+                action="{{ route('ventas.devolver.store', $venta) }}"
+                class="space-y-5"
+                x-data="devolucionPostventa()"
+                x-init="$nextTick(() => updateTotal())"
+            >
                 @csrf
 
                 {{-- Selección de equipos devolubles --}}
@@ -64,8 +194,12 @@
                                         <input type="checkbox"
                                                name="detalles[]"
                                                value="{{ $detalle->id }}"
-                                               data-importe="{{ (string) $detalle->precio }}"
-                                               @change="updateTotal()"
+                                               data-centavos="{{ \App\Support\Money::aCentavos($detalle->precio) }}"
+                                               x-on:change="
+                                                   totalCentavos += $event.target.checked
+                                                       ? Number($event.target.dataset.centavos)
+                                                       : -Number($event.target.dataset.centavos)
+                                               "
                                                class="rounded border-gray-300">
                                     </td>
                                     <td class="px-5 py-3 font-semibold text-gray-900">{{ $detalle->item->codigo }}</td>
@@ -86,7 +220,10 @@
                             <tr>
                                 <td colspan="3" class="px-5 py-3 text-right text-sm font-semibold text-gray-700">Total a devolver</td>
                                 <td class="px-5 py-3 text-right text-base font-bold text-gray-900">
-                                    <span x-text="total.toFixed(2)" x-bind:class="total > 0 ? 'text-gray-900' : 'text-gray-400'">0.00</span>
+                                    <span
+                                        x-text="money(totalCentavos)"
+                                        x-bind:class="totalCentavos > 0 ? 'text-gray-900' : 'text-gray-400'"
+                                    >0.00</span>
                                 </td>
                             </tr>
                         </tfoot>
@@ -111,17 +248,151 @@
                         <x-input-error :messages="$errors->get('motivo')" class="mt-2" />
                     </div>
 
-                    <div>
-                        <x-input-label for="forma_reembolso" value="Forma de reembolso" />
-                        <select id="forma_reembolso" name="forma_reembolso" required
-                                class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
-                            <option value="" disabled @selected(old('forma_reembolso') === null)>Selecciona una opción</option>
-                            @foreach($formasReembolso as $forma)
-                                <option value="{{ $forma }}" @selected(old('forma_reembolso') === $forma)>{{ $forma }}</option>
-                            @endforeach
-                        </select>
-                        <x-input-error :messages="$errors->get('forma_reembolso')" class="mt-2" />
-                    </div>
+                    @if($reembolsoAutomatico)
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                            <div>
+                                <h3 class="text-sm font-bold text-emerald-900">
+                                    Reembolso según el pago original
+                                </h3>
+
+                                <p class="mt-1 text-xs text-emerald-800">
+                                    Selecciona los equipos. El sistema prorratea el importe usando la
+                                    composición original de pagos y considera devoluciones anteriores.
+                                </p>
+                            </div>
+
+                            <div class="overflow-hidden rounded-lg border border-emerald-200 bg-white">
+                                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead class="bg-gray-50">
+                                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            <th class="px-4 py-2">Método original</th>
+                                            <th class="px-4 py-2 text-right">Cobrado</th>
+                                            <th class="px-4 py-2 text-right">Esta devolución</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody class="divide-y divide-gray-100">
+                                        @foreach($pagosReembolsoUi as $pago)
+                                            <tr>
+                                                <td class="px-4 py-3 font-semibold text-gray-900">
+                                                    {{ $pago['metodo'] }}
+                                                </td>
+
+                                                <td class="px-4 py-3 text-right text-gray-700">
+                                                    {{ \App\Support\Money::formatear(
+                                                        \App\Support\Money::aPrecio($pago['monto_centavos'])
+                                                    ) }}
+                                                </td>
+
+                                                <td
+                                                    class="px-4 py-3 text-right font-bold text-gray-900"
+                                                    x-text="money(reembolsoPago({{ $pago['id'] }}))"
+                                                >
+                                                    0.00
+                                                </td>
+                                            </tr>
+
+                                            @if(in_array($pago['metodo'], ['TARJETA', 'TRANSFERENCIA'], true))
+                                                <tr class="bg-gray-50">
+                                                    <td colspan="3" class="px-4 py-3">
+                                                        <label class="block text-xs font-semibold text-gray-700">
+                                                            Referencia de devolución {{ $pago['metodo'] }}
+                                                        </label>
+
+                                                        <input
+                                                            type="text"
+                                                            name="referencias_reembolso[{{ $pago['id'] }}]"
+                                                            value="{{ old('referencias_reembolso.'.$pago['id']) }}"
+                                                            maxlength="100"
+                                                            autocomplete="off"
+                                                            placeholder="Folio o autorización de la devolución"
+                                                            x-bind:required="reembolsoPago({{ $pago['id'] }}) > 0"
+                                                            x-bind:disabled="reembolsoPago({{ $pago['id'] }}) === 0"
+                                                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 disabled:bg-gray-100"
+                                                        >
+
+                                                        <p class="mt-1 text-[11px] text-gray-500">
+                                                            Solo es necesaria cuando esta devolución tiene importe en ese método.
+                                                        </p>
+                                                    </td>
+                                                </tr>
+                                            @endif
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            @if(collect($pagosReembolsoUi)->contains(fn ($p) => $p['metodo'] === 'EFECTIVO'))
+                                <p class="text-xs text-emerald-900">
+                                    La parte en <strong>EFECTIVO</strong> saldrá de la caja abierta y quedará
+                                    registrada automáticamente en el corte.
+                                </p>
+                            @endif
+                        </div>
+                    @else
+                        <div
+                            x-data="{ formaLegacy: @js(old('forma_reembolso')) }"
+                            class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3"
+                        >
+                            <div>
+                                <h3 class="text-sm font-bold text-amber-900">
+                                    Reembolso de venta histórica
+                                </h3>
+
+                                <p class="mt-1 text-xs text-amber-800">
+                                    No existe un desglose confiable de los pagos originales.
+                                    Debes indicar manualmente cómo se realizó el reembolso.
+                                </p>
+                            </div>
+
+                            <div>
+                                <x-input-label for="forma_reembolso" value="Forma de reembolso" />
+
+                                <select
+                                    id="forma_reembolso"
+                                    name="forma_reembolso"
+                                    x-model="formaLegacy"
+                                    required
+                                    class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900"
+                                >
+                                    <option value="" disabled>Selecciona una opción</option>
+
+                                    @foreach($formasReembolso as $forma)
+                                        <option value="{{ $forma }}">
+                                            {{ $forma }}
+                                        </option>
+                                    @endforeach
+                                </select>
+
+                                <x-input-error :messages="$errors->get('forma_reembolso')" class="mt-2" />
+                            </div>
+
+                            <div
+                                x-show="formaLegacy === 'TARJETA' || formaLegacy === 'TRANSFERENCIA'"
+                                x-cloak
+                            >
+                                <x-input-label for="referencia_reembolso" value="Referencia de devolución" />
+
+                                <input
+                                    id="referencia_reembolso"
+                                    name="referencia_reembolso"
+                                    type="text"
+                                    value="{{ old('referencia_reembolso') }}"
+                                    maxlength="100"
+                                    autocomplete="off"
+                                    x-bind:required="formaLegacy === 'TARJETA' || formaLegacy === 'TRANSFERENCIA'"
+                                    placeholder="Folio o autorización de la devolución"
+                                    class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900"
+                                >
+                            </div>
+                        </div>
+                    @endif
+
+                    @if($errors->has('reembolso'))
+                        <div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                            {{ $errors->first('reembolso') }}
+                        </div>
+                    @endif
 
                     <div class="flex gap-2">
                         <a href="{{ route('ventas.show', $venta) }}"

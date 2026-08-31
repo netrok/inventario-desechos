@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PagoVenta extends Model
 {
@@ -68,6 +69,11 @@ class PagoVenta extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function reembolsos(): HasMany
+    {
+        return $this->hasMany(ReembolsoPostventa::class, 'pago_venta_id');
     }
 
     public function esEfectivo(): bool

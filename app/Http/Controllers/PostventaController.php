@@ -17,15 +17,75 @@ class PostventaController extends Controller
         private readonly PostventaService $service
     ) {}
 
+    private function esReembolsoAutomatico(Venta $venta): bool
+    {
+        $venta->loadMissing('pagos');
+
+        if ($venta->pagos->isEmpty()) {
+            return false;
+        }
+
+        $origenes = $venta->pagos
+            ->pluck('origen')
+            ->unique()
+            ->values();
+
+        return $origenes->count() === 1
+            && $origenes->first() === PagoVenta::ORIGEN_POS;
+    }
+
     /**
-     * Deriva la forma de reembolso sugerida desde los pagos reales de la venta:
-     * método único si solo hubo uno; MIXTO o legacy sin pagos → EFECTIVO.
+     * Compatibilidad B14.2:
+     * distingue fallos financieros del reembolso de los errores normales
+     * de dominio de cancelación/devolución.
+     *
+     * Cuando estabilicemos B14.2 esto puede evolucionar a excepciones de
+     * dominio especializadas, pero centralizamos aquí la clasificación para
+     * no dispersarla por el controlador.
+     */
+    private function esErrorFinancieroPostventa(DomainException $e): bool
+    {
+        $mensaje = mb_strtolower($e->getMessage());
+
+        foreach ([
+            'reembolso',
+            'caja',
+            'pago',
+            'referencia',
+            'concili',
+            'prorrateo',
+            'composición',
+            'composicion',
+            'saldo económico',
+            'saldo economico',
+        ] as $indicador) {
+            if (str_contains($mensaje, $indicador)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Compatibilidad temporal con la vista de cancelación B13/B14.
+     *
+     * En B14.2 las ventas modernas dejarán de elegir manualmente la forma;
+     * mientras cambiamos la vista mantenemos esta variable disponible.
      */
     private function formaReembolsoSugerida(Venta $venta): string
     {
-        $metodos = $venta->pagos->pluck('metodo')->unique()->values();
+        $venta->loadMissing('pagos');
 
-        if ($metodos->count() === 1 && in_array($metodos->first(), PagoVenta::METODOS, true)) {
+        $metodos = $venta->pagos
+            ->pluck('metodo')
+            ->unique()
+            ->values();
+
+        if (
+            $metodos->count() === 1
+            && in_array($metodos->first(), PagoVenta::METODOS, true)
+        ) {
             return $metodos->first();
         }
 
@@ -33,55 +93,135 @@ class PostventaController extends Controller
     }
 
     /**
-     * Formulario de cancelación (por permiso ventas.cancelar).
+     * Datos monetarios seguros para presentar/prorratear reembolsos en UI.
+     * El navegador solo PREVISUALIZA; PostventaService sigue siendo la
+     * autoridad y recalcula todo server-side.
+     *
+     * @return array<int, array{
+     *     id:int,
+     *     metodo:string,
+     *     monto_centavos:int,
+     *     ya_reembolsado_centavos:int,
+     *     orden:int
+     * }>
      */
+    private function pagosReembolsoUi(Venta $venta): array
+    {
+        $venta->loadMissing('pagos.reembolsos');
+
+        return $venta->pagos
+            ->map(function (PagoVenta $pago): array {
+                $yaReembolsado = 0;
+
+                foreach ($pago->reembolsos as $reembolso) {
+                    $yaReembolsado += \App\Support\Money::aCentavos(
+                        $reembolso->monto
+                    );
+                }
+
+                return [
+                    'id' => (int) $pago->id,
+                    'metodo' => $pago->metodo,
+                    'monto_centavos' => \App\Support\Money::aCentavos(
+                        $pago->monto_aplicado
+                    ),
+                    'ya_reembolsado_centavos' => $yaReembolsado,
+                    'orden' => (int) $pago->orden,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     public function cancelarForm(Venta $venta)
     {
-        abort_unless($venta->esElegibleParaCancelacion(), 409, 'Esta venta no puede cancelarse.');
-
-        $venta->load(['user', 'detalles.item', 'detalles.item.categoria', 'pagos']);
-
-        // Sugerencia de reembolso: el mismo método único de pago si existía; si
-        // la venta fue mixta o legacy, se sugiere EFECTIVO.
-        $sugerido = $this->formaReembolsoSugerida($venta);
-
-        return view('postventa.cancelar', [
-            'venta' => $venta,
-            'totalFormateado' => \App\Support\Money::formatear((string) $venta->total),
-            'formasReembolso' => DocumentoPostventa::FORMAS_REEMBOLSO,
-            'sugerido' => $sugerido,
-        ]);
-    }
-
-    /**
-     * Ejecuta la cancelación atómica (por permiso ventas.cancelar).
-     */
-    public function cancelar(Request $request, Venta $venta)
-    {
-        $data = $request->validate([
-            'motivo' => ['required', 'string', 'min:5', 'max:2000'],
-            'forma_reembolso' => ['required', Rule::in(DocumentoPostventa::FORMAS_REEMBOLSO)],
-        ]);
-
-        try {
-            $documento = $this->service->cancelar($venta, $data['motivo'], $data['forma_reembolso']);
-        } catch (DomainException $e) {
-            throw ValidationException::withMessages(['motivo' => $e->getMessage()]);
-        }
-
-        return redirect()->route('postventa.show', $documento)
-            ->with('success', "Venta {$venta->folio} cancelada (documento {$documento->folio}).");
-    }
-
-    /**
-     * Formulario de devolución (por permiso ventas.devolver).
-     */
-    public function devolverForm(Venta $venta)
-    {
-        abort_unless($venta->esElegibleParaDevolucion(), 409, 'Esta venta no admite devoluciones.');
+        abort_unless(
+            $venta->esElegibleParaCancelacion(),
+            409,
+            'Esta venta no puede cancelarse.'
+        );
 
         $venta->load([
             'user',
+            'detalles.item',
+            'detalles.item.categoria',
+            'pagos',
+        ]);
+
+        return view('postventa.cancelar', [
+            'venta' => $venta,
+            'totalFormateado' => \App\Support\Money::formatear(
+                (string) $venta->total
+            ),
+            'formasReembolso' => DocumentoPostventa::FORMAS_REEMBOLSO,
+            'sugerido' => $this->formaReembolsoSugerida($venta),
+            'reembolsoAutomatico' => $this->esReembolsoAutomatico($venta),
+            'pagosReembolsoUi' => $this->pagosReembolsoUi($venta),
+        ]);
+    }
+
+    public function cancelar(Request $request, Venta $venta)
+    {
+        $venta->loadMissing('pagos');
+        $automatico = $this->esReembolsoAutomatico($venta);
+
+        $rules = [
+            'motivo' => ['required', 'string', 'min:5', 'max:2000'],
+            'referencias_reembolso' => ['nullable', 'array'],
+            'referencias_reembolso.*' => ['nullable', 'string', 'max:100'],
+            'referencia_reembolso' => ['nullable', 'string', 'max:100'],
+        ];
+
+        if ($automatico) {
+            $rules['forma_reembolso'] = ['nullable'];
+        } else {
+            $rules['forma_reembolso'] = [
+                'required',
+                Rule::in(DocumentoPostventa::FORMAS_REEMBOLSO),
+            ];
+        }
+
+        $data = $request->validate($rules);
+
+        try {
+            $documento = $this->service->cancelar(
+                $venta,
+                $data['motivo'],
+                $automatico
+                    ? null
+                    : ($data['forma_reembolso'] ?? null),
+                $data['referencias_reembolso'] ?? [],
+                $data['referencia_reembolso'] ?? null
+            );
+        } catch (DomainException $e) {
+            $campo = $this->esErrorFinancieroPostventa($e)
+                ? 'reembolso'
+                : 'motivo';
+
+            throw ValidationException::withMessages([
+                $campo => $e->getMessage(),
+            ]);
+        }
+
+        return redirect()
+            ->route('postventa.show', $documento)
+            ->with(
+                'success',
+                "Venta {$venta->folio} cancelada (documento {$documento->folio})."
+            );
+    }
+
+    public function devolverForm(Venta $venta)
+    {
+        abort_unless(
+            $venta->esElegibleParaDevolucion(),
+            409,
+            'Esta venta no admite devoluciones.'
+        );
+
+        $venta->load([
+            'user',
+            'pagos',
             'detalles.item',
             'detalles.item.categoria',
             'detalles.documentoPostventaDetalle.documento',
@@ -90,41 +230,71 @@ class PostventaController extends Controller
         return view('postventa.devolver', [
             'venta' => $venta,
             'formasReembolso' => DocumentoPostventa::FORMAS_REEMBOLSO,
+            'reembolsoAutomatico' => $this->esReembolsoAutomatico($venta),
+            'pagosReembolsoUi' => $this->pagosReembolsoUi($venta),
         ]);
     }
 
-    /**
-     * Ejecuta la devolución (parcial o total) atómica (por permiso ventas.devolver).
-     */
     public function devolver(Request $request, Venta $venta)
     {
-        $data = $request->validate([
-            'motivo' => ['required', 'string', 'min:3', 'max:2000'],
-            'forma_reembolso' => ['required', Rule::in(DocumentoPostventa::FORMAS_REEMBOLSO)],
-            'detalles' => ['required', 'array', 'min:1', 'max:'.$venta->detalles()->count()],
-            'detalles.*' => ['required', 'integer', 'distinct'],
-        ]);
+        $venta->loadMissing('pagos');
+        $automatico = $this->esReembolsoAutomatico($venta);
 
-        // El importe se ignora deliberadamente: se calcula server-side.
+        $rules = [
+            'motivo' => ['required', 'string', 'min:3', 'max:2000'],
+            'detalles' => [
+                'required',
+                'array',
+                'min:1',
+                'max:'.$venta->detalles()->count(),
+            ],
+            'detalles.*' => ['required', 'integer', 'distinct'],
+            'referencias_reembolso' => ['nullable', 'array'],
+            'referencias_reembolso.*' => ['nullable', 'string', 'max:100'],
+            'referencia_reembolso' => ['nullable', 'string', 'max:100'],
+        ];
+
+        if ($automatico) {
+            $rules['forma_reembolso'] = ['nullable'];
+        } else {
+            $rules['forma_reembolso'] = [
+                'required',
+                Rule::in(DocumentoPostventa::FORMAS_REEMBOLSO),
+            ];
+        }
+
+        $data = $request->validate($rules);
+
         try {
             $documento = $this->service->devolver(
                 $venta,
                 $data['detalles'],
                 $data['motivo'],
-                $data['forma_reembolso']
+                $automatico
+                    ? null
+                    : ($data['forma_reembolso'] ?? null),
+                $data['referencias_reembolso'] ?? [],
+                $data['referencia_reembolso'] ?? null
             );
         } catch (DomainException $e) {
-            throw ValidationException::withMessages(['detalles' => $e->getMessage()]);
+            $campo = $this->esErrorFinancieroPostventa($e)
+                ? 'reembolso'
+                : 'detalles';
+
+            throw ValidationException::withMessages([
+                $campo => $e->getMessage(),
+            ]);
         }
 
-        return redirect()->route('postventa.show', $documento)
-            ->with('success', "Devolución registrada (documento {$documento->folio}). Los artículos recibidos quedan pendientes de revisión antes de poder volver a venderse.")
+        return redirect()
+            ->route('postventa.show', $documento)
+            ->with(
+                'success',
+                "Devolución registrada (documento {$documento->folio}). Los artículos recibidos quedan pendientes de revisión antes de poder volver a venderse."
+            )
             ->with('pendientesRevision', true);
     }
 
-    /**
-     * Detalle consultable de un documento postventa (por ventas.ver).
-     */
     public function show(DocumentoPostventa $documento)
     {
         $documento->load([
@@ -133,14 +303,15 @@ class PostventaController extends Controller
             'detalles.item',
             'detalles.item.categoria',
             'detalles.ventaDetalle',
+            'reembolsos',
+            'reembolsos.pagoVenta',
         ]);
 
-        return view('postventa.show', ['documento' => $documento]);
+        return view('postventa.show', [
+            'documento' => $documento,
+        ]);
     }
 
-    /**
-     * Comprobante imprimible del documento postventa (por ventas.ver).
-     */
     public function print(DocumentoPostventa $documento)
     {
         $documento->load([
@@ -148,8 +319,12 @@ class PostventaController extends Controller
             'venta.user',
             'detalles.item',
             'detalles.item.categoria',
+            'reembolsos',
+            'reembolsos.pagoVenta',
         ]);
 
-        return view('postventa.print', ['documento' => $documento]);
+        return view('postventa.print', [
+            'documento' => $documento,
+        ]);
     }
 }

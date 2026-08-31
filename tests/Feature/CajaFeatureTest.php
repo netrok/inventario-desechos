@@ -589,7 +589,7 @@ it('el reembolso EFECTIVO exige una sesión de caja abierta', function () {
             'motivo' => 'Cancelación sin caja abierta.',
             'forma_reembolso' => DocumentoPostventa::FORMA_EFECTIVO,
         ])
-        ->assertSessionHasErrors('motivo');
+        ->assertSessionHasErrors('reembolso');
 
     expect(DocumentoPostventa::count())->toBe(0);
     expect(MovimientoCaja::count())->toBe(0);
@@ -927,4 +927,120 @@ it('rechaza en DB un movimiento con tipo y dirección incoherentes', function ()
         'monto' => '10.00',
         'concepto' => 'Incoherente',
     ]))->toThrow(\Illuminate\Database\QueryException::class);
+});
+
+/**
+ * ============================================================
+ * B14.1 — REIMPRESION E HISTORIAL DE CORTES
+ * ============================================================
+ */
+it('B14.1 permite consultar e imprimir en HTML una sesión cerrada', function () {
+    $user = cajaAdmin();
+    $open = openCajaFor($user, 1000.0);
+
+    $cerrada = app(CajaService::class)->cerrarSesion(
+        $open,
+        $user,
+        ['1000' => 1],
+        100000,
+        null,
+    );
+
+    $web = $this->actingAs($user)
+        ->get(route('cajas.corte', $cerrada));
+
+    $web->assertOk()
+        ->assertSee('Corte de caja')
+        ->assertSee($cerrada->folio)
+        ->assertSee('Imprimir')
+        ->assertSee('PDF')
+        ->assertSee('XLSX');
+
+    $imprimir = $this->actingAs($user)
+        ->get(route('cajas.corte.imprimir', $cerrada));
+
+    $imprimir->assertOk()
+        ->assertSee($cerrada->folio)
+        ->assertSee('window.print()', false);
+});
+
+it('B14.1 bloquea WEB imprimir PDF y XLSX mientras la sesión siga abierta', function () {
+    $user = cajaAdmin();
+    $open = openCajaFor($user, 1000.0);
+
+    foreach ([
+        'cajas.corte',
+        'cajas.corte.imprimir',
+        'cajas.corte.pdf',
+        'cajas.corte.xlsx',
+    ] as $routeName) {
+        $this->actingAs($user)
+            ->get(route($routeName, $open))
+            ->assertStatus(409);
+    }
+});
+
+it('B14.1 un operador ajeno sin cajas.ver_todas no consulta ni imprime otro corte', function () {
+    $operador = cajaAdmin();
+    $ajeno = cajaOperador();
+
+    $open = openCajaFor($operador, 1000.0);
+
+    $cerrada = app(CajaService::class)->cerrarSesion(
+        $open,
+        $operador,
+        ['1000' => 1],
+        100000,
+        null,
+    );
+
+    $this->actingAs($ajeno)
+        ->get(route('cajas.corte', $cerrada))
+        ->assertForbidden();
+
+    $this->actingAs($ajeno)
+        ->get(route('cajas.corte.imprimir', $cerrada))
+        ->assertForbidden();
+});
+
+it('B14.1 auditor con cajas.ver y cajas.ver_todas puede reimprimir sin cajas.movimientos', function () {
+    $operador = cajaAdmin();
+
+    $open = openCajaFor($operador, 1000.0);
+
+    $cerrada = app(CajaService::class)->cerrarSesion(
+        $open,
+        $operador,
+        ['1000' => 1],
+        100000,
+        null,
+    );
+
+    $auditor = User::factory()->create();
+    $auditor->givePermissionTo([
+        'cajas.ver',
+        'cajas.ver_todas',
+    ]);
+
+    expect($auditor->can('cajas.movimientos'))->toBeFalse();
+
+    $index = $this->actingAs($auditor)
+        ->get(route('cajas.index'));
+
+    $index->assertOk()
+        ->assertSee($cerrada->folio)
+        ->assertSee('Ver corte')
+        ->assertSee('Imprimir')
+        ->assertSee('PDF')
+        ->assertSee('XLSX');
+
+    $this->actingAs($auditor)
+        ->get(route('cajas.corte', $cerrada))
+        ->assertOk()
+        ->assertSee($cerrada->folio);
+
+    $this->actingAs($auditor)
+        ->get(route('cajas.corte.imprimir', $cerrada))
+        ->assertOk()
+        ->assertSee('window.print()', false);
 });

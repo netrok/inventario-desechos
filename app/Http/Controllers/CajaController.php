@@ -294,7 +294,41 @@ class CajaController extends Controller
     {
         $this->guardarSesionVisible($sesion);
 
+        // El corte solo existe después del cierre. Esto evita revelar por URL
+        // directa el efectivo esperado de una sesión todavía abierta.
+        if ($sesion->estaAbierta()) {
+            abort(409, 'El corte solo está disponible para sesiones cerradas.');
+        }
+
         return $this->service->datosCorte($sesion);
+    }
+
+    /**
+     * Consulta WEB de un corte ya cerrado.
+     */
+    public function corte(SesionCaja $sesion)
+    {
+        $datos = $this->datosCorte($sesion);
+
+        return view('cajas.corte', [
+            'd' => $datos,
+            'sesion' => $sesion,
+            'modoImpresion' => false,
+        ]);
+    }
+
+    /**
+     * Versión HTML limpia para reimpresión desde navegador.
+     */
+    public function corteImprimir(SesionCaja $sesion)
+    {
+        $datos = $this->datosCorte($sesion);
+
+        return view('cajas.corte', [
+            'd' => $datos,
+            'sesion' => $sesion,
+            'modoImpresion' => true,
+        ]);
     }
 
     public function cortePdf(SesionCaja $sesion)

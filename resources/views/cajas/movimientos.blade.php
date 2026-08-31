@@ -13,6 +13,16 @@
             <div class="flex items-center gap-2">
                 @if(! $sesion->estaAbierta())
                     @can('cajas.ver')
+                        <a href="{{ route('cajas.corte', $sesion) }}"
+                           class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
+                            Ver corte
+                        </a>
+                        <a href="{{ route('cajas.corte.imprimir', $sesion) }}"
+                           target="_blank"
+                           rel="noopener"
+                           class="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black">
+                            Imprimir
+                        </a>
                         <a href="{{ route('cajas.corte.pdf', $sesion) }}"
                            class="inline-flex items-center rounded-lg bg-rose-700 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-800">
                             PDF

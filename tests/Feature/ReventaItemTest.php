@@ -328,11 +328,16 @@ it('cancelar la Venta 2 afecta solo su VentaDetalle y deja separadas las postven
         ])
         ->assertSessionHasErrors('motivo');
 
-    // Cancelar la VENTA 2: actúa solo sobre su propio detalle.
+    // Cancelar la VENTA 2: actúa solo sobre su propio detalle y
+    // reembolsa por el método original de pago.
+    $pagoVenta2 = $venta2->pagos()->firstOrFail();
+
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta2), [
             'motivo' => 'Cancelación de la venta nueva.',
-            'forma_reembolso' => 'EFECTIVO',
+            'referencias_reembolso' => [
+                $pagoVenta2->id => 'DEV-TARJ-REVENTA-001',
+            ],
         ])
         ->assertSessionHasNoErrors();
 
