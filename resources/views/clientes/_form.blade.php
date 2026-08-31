@@ -71,3 +71,41 @@
         @endif
     </div>
 </div>
+
+@if(\App\Support\CreditoAcceso::puedeConfigurar(Auth::user()))
+    <div class="mt-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+        <div>
+            <h3 class="text-sm font-semibold text-gray-900">Crédito</h3>
+            <p class="text-xs text-gray-500">
+                El crédito habilitado permite posteriormente vender con saldo pendiente.
+                El límite y plazo serán revalidados por el servidor al realizar la venta.
+            </p>
+        </div>
+
+        <label class="flex items-start gap-2 text-sm text-gray-700">
+            <input type="hidden" name="credito_habilitado" value="0">
+            <input type="checkbox" name="credito_habilitado" value="1"
+                   @checked((bool) old('credito_habilitado', $cliente->credito_habilitado ?? false))
+                   class="mt-0.5 rounded border-gray-300 text-gray-900 focus:ring-gray-900">
+            <span>Habilitar crédito</span>
+        </label>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+                <x-input-label for="limite_credito" value="Límite de crédito ($)" />
+                <x-text-input id="limite_credito" name="limite_credito" type="number" step="0.01" min="0"
+                              class="mt-1 block w-full"
+                              value="{{ old('limite_credito', $cliente->limite_credito ?? 0) }}" />
+                <x-input-error :messages="$errors->get('limite_credito')" class="mt-2" />
+            </div>
+
+            <div>
+                <x-input-label for="dias_credito" value="Días de crédito" />
+                <x-text-input id="dias_credito" name="dias_credito" type="number" min="1"
+                              class="mt-1 block w-full"
+                              value="{{ old('dias_credito', $cliente->dias_credito ?? '') }}" />
+                <x-input-error :messages="$errors->get('dias_credito')" class="mt-2" />
+            </div>
+        </div>
+    </div>
+@endif

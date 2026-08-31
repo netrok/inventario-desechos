@@ -88,11 +88,11 @@ it('el fresh no crea permisos huérfanos de ventas, papelera ni catálogos', fun
     ])->count())->toBe(0);
 });
 
-it('la matriz tiene 40 permisos canónicos y Admin reúne los 40', function () {
-    expect(Permission::count())->toBe(40);
+it('la matriz tiene 41 permisos canónicos y Admin reúne los 41', function () {
+    expect(Permission::count())->toBe(41);
 
     $admin = Role::findByName('Admin', 'web');
-    expect($admin->permissions()->count())->toBe(40);
+    expect($admin->permissions()->count())->toBe(41);
 });
 
 it('la escritura de efectivo (entrada/retiro/ajuste) es exclusiva de Admin; Ventas solo consulta', function () {
@@ -116,6 +116,12 @@ it('configuracion.editar está asignado exclusivamente al rol Admin', function (
     $rolesConEditar = Role::permission('configuracion.editar')->pluck('name')->sort()->values()->all();
 
     expect($rolesConEditar)->toBe(['Admin']);
+});
+
+it('B15.1 creditos.configurar está asignado exclusivamente al rol Admin', function () {
+    $rolesConCredito = Role::permission('creditos.configurar')->pluck('name')->sort()->values()->all();
+
+    expect($rolesConCredito)->toBe(['Admin']);
 });
 
 it('ningún rol no-Admin (legacy incluido) tiene configuracion.editar/ver; Auditor solo lectura', function () {
@@ -144,6 +150,19 @@ it('Ventas y Almacen reciben 403 en configuración (ver y editar)', function () 
             ])
             ->assertForbidden();
     }
+});
+
+it('el guard server-side rechaza otorgar creditos.configurar a un rol no Admin', function () {
+    expect(fn () => \App\Support\CreditoAcceso::assertRolesSeguros([
+        'Admin' => ['creditos.configurar'],
+        'Ventas' => ['creditos.configurar'],
+    ]))->toThrow(\InvalidArgumentException::class);
+
+    expect(fn () => \App\Support\CreditoAcceso::assertRolConPermisoConfigurarSeguro('Auditor', ['creditos.configurar']))
+        ->toThrow(\InvalidArgumentException::class);
+
+    expect(\App\Support\CreditoAcceso::assertRolConPermisoConfigurarSeguro('Admin', ['creditos.configurar']))
+        ->not->toThrow(\InvalidArgumentException::class);
 });
 
 it('el guard server-side rechaza otorgar configuracion.editar a un rol no Admin', function () {

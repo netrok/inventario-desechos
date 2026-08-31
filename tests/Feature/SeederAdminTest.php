@@ -70,6 +70,6 @@ test('re-seed sincroniza roles y permisos de forma idempotente', function () {
     $this->seed(RolesAndAdminSeeder::class);
 
     expect(Role::count())->toBe(6)
-        ->and(\Spatie\Permission\Models\Permission::count())->toBe(40)
-        ->and(Role::where('name', 'Admin')->first()->permissions->count())->toBe(40);
+        ->and(\Spatie\Permission\Models\Permission::count())->toBe(41)
+        ->and(Role::where('name', 'Admin')->first()->permissions->count())->toBe(41);
 });

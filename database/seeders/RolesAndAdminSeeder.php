@@ -91,6 +91,10 @@ class RolesAndAdminSeeder extends Seeder
             'clientes.editar',
             'clientes.desactivar',
 
+            // Crédito (B15): configurar crédito por cliente es Admin-only.
+            // NO se asigna a clientes.editar: son permisos distintos.
+            'creditos.configurar',
+
             // Configuración general
             'configuracion.ver',
             'configuracion.editar',
@@ -178,6 +182,15 @@ class RolesAndAdminSeeder extends Seeder
         // configuracion.editar queda prohibido para cualquier rol no Admin, aunque
         // más adelante alguien edite este seeder o exista una futura UI de roles.
         \App\Support\ConfiguracionAcceso::assertRolesSeguros([
+            'Admin' => $perms,
+            'Almacen' => $almacenPermisos,
+            'Ventas' => $ventasPermisos,
+            'Auditor' => $auditorPermisos,
+        ]);
+
+        // Guard server-side B15.1: creditos.configurar es Admin-only.
+        // Cualquier intento de asignarlo a un rol no Admin se rechaza.
+        \App\Support\CreditoAcceso::assertRolesSeguros([
             'Admin' => $perms,
             'Almacen' => $almacenPermisos,
             'Ventas' => $ventasPermisos,

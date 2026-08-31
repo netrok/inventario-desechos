@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cliente;
+use App\Support\CreditoAcceso;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ClienteController extends Controller
 {
@@ -33,6 +37,121 @@ class ClienteController extends Controller
         $data['notas'] = $request->filled('notas') ? trim($request->input('notas')) : null;
 
         return $data;
+    }
+
+    /**
+     * B15.1 — Configuración crediticia.
+     *
+     * Fuente de verdad: CreditoAcceso::puedeConfigurar() (rol Admin + permiso
+     * `creditos.configurar`). Un usuario NO Admin con el permiso directo NO
+     * puede modificar estos campos por HTTP, aunque los forje: se devuelve []
+     * (los valores actuales se conservan en update; los defaults en create).
+     *
+     * Request parcial: no se asume que el formulario mande siempre los tres
+     * campos. Cada campo AUSENTE conserva el valor actual del Cliente (para
+     * update) o el default (para create); cada campo PRESENTE usa el nuevo
+     * valor. Se construye el estado financiero RESULTANTE completo y se valida
+     * ese estado entero antes de persistir.
+     *
+     * Si NO viene NINGUNO de los campos de crédito se devuelve [] (update
+     * parcial conserva; create usa defaults de BD/modelo).
+     *
+     * Reglas de validación (sobre el estado resultante):
+     *  - limite_credito >= 0 siempre.
+     *  - dias_credito, cuando no es nulo, > 0.
+     *  - Si credito_habilitado = true => limite > 0 y dias > 0 (redundante con
+     *    la constraint BD, pero entregado como ValidationException amigable).
+     */
+    private function datosCredito(Request $request, ?Cliente $cliente = null): array
+    {
+        if (! CreditoAcceso::puedeConfigurar(Auth::user())) {
+            return [];
+        }
+
+        if (! $request->has('credito_habilitado')
+            && ! $request->has('limite_credito')
+            && ! $request->has('dias_credito')) {
+            return [];
+        }
+
+        $candidato = [
+            'credito_habilitado' => $request->has('credito_habilitado') ? $request->input('credito_habilitado') : null,
+            'limite_credito' => $this->inputFinancieroOpcional($request, 'limite_credito'),
+            'dias_credito' => $this->inputFinancieroOpcional($request, 'dias_credito'),
+        ];
+
+        $reglas = [];
+        if ($request->has('credito_habilitado')) {
+            $reglas['credito_habilitado'] = ['required', 'boolean'];
+        }
+        if ($request->has('limite_credito')) {
+            $reglas['limite_credito'] = ['nullable', 'numeric', 'min:0'];
+        }
+        if ($request->has('dias_credito')) {
+            $reglas['dias_credito'] = ['nullable', 'integer', 'min:1'];
+        }
+
+        $validado = Validator::make($candidato, $reglas)->validate();
+
+        $base = $cliente
+            ? [
+                'credito_habilitado' => (bool) $cliente->credito_habilitado,
+                'limite_credito' => $cliente->limite_credito,
+                'dias_credito' => $cliente->dias_credito,
+            ]
+            : [
+                'credito_habilitado' => false,
+                'limite_credito' => 0,
+                'dias_credito' => null,
+            ];
+
+        if (array_key_exists('credito_habilitado', $validado)) {
+            $base['credito_habilitado'] = $request->boolean('credito_habilitado');
+        }
+        if (array_key_exists('limite_credito', $validado)) {
+            $base['limite_credito'] = $validado['limite_credito'];
+        }
+        if (array_key_exists('dias_credito', $validado)) {
+            $base['dias_credito'] = $validado['dias_credito'];
+        }
+
+        $habilitado = $base['credito_habilitado'];
+        $limite = $base['limite_credito'];
+        $dias = $base['dias_credito'];
+
+        if ($habilitado) {
+            if ($limite === null || $limite <= 0) {
+                throw ValidationException::withMessages([
+                    'limite_credito' => 'Si el crédito está habilitado, el límite debe ser mayor a cero.',
+                ]);
+            }
+
+            if ($dias === null || $dias <= 0) {
+                throw ValidationException::withMessages([
+                    'dias_credito' => 'Si el crédito está habilitado, los días de crédito deben ser mayor a cero.',
+                ]);
+            }
+        }
+
+        return [
+            'credito_habilitado' => $habilitado,
+            'limite_credito' => $limite === null ? '0' : (string) $limite,
+            'dias_credito' => $dias,
+        ];
+    }
+
+    /**
+     * Campo financiero opcional: null si ausente o en blanco.
+     */
+    private function inputFinancieroOpcional(Request $request, string $campo): ?string
+    {
+        if (! $request->has($campo)) {
+            return null;
+        }
+
+        $valor = $request->input($campo);
+
+        return $valor === null || trim((string) $valor) === '' ? null : (string) $valor;
     }
 
     public function index(Request $request)
@@ -72,7 +191,7 @@ class ClienteController extends Controller
 
     public function store(Request $request)
     {
-        $data = $this->normalizar($request);
+        $data = array_merge($this->normalizar($request), $this->datosCredito($request));
         $data['activo'] = true;
 
         Cliente::create($data);
@@ -104,7 +223,9 @@ class ClienteController extends Controller
 
     public function update(Request $request, Cliente $cliente)
     {
-        $cliente->update($this->normalizar($request));
+        $data = array_merge($this->normalizar($request), $this->datosCredito($request, $cliente));
+
+        $cliente->update($data);
 
         return redirect()
             ->route('clientes.show', $cliente)
@@ -159,7 +280,7 @@ class ClienteController extends Controller
      */
     public function rapida(Request $request)
     {
-        $data = $this->normalizar($request);
+        $data = array_merge($this->normalizar($request), $this->datosCredito($request));
         $data['activo'] = true;
 
         $cliente = Cliente::create($data);
