@@ -95,6 +95,11 @@ class RolesAndAdminSeeder extends Seeder
             // NO se asigna a clientes.editar: son permisos distintos.
             'creditos.configurar',
 
+            // CxC / cobranza (B15.4). reversar_abono es Admin-only (guard CxCAcceso).
+            'cxc.ver',
+            'cxc.abonar',
+            'cxc.reversar_abono',
+
             // Configuración general
             'configuracion.ver',
             'configuracion.editar',
@@ -146,6 +151,7 @@ class RolesAndAdminSeeder extends Seeder
         // movimientos, cerrar) sin gestionar cajas físicas ni ver historial
         // global, y SIN libertad de registrar entradas/retiros/ajustes de
         // efectivo (reservados a Admin vía cajas.entrada/cajas.retiro/cajas.ajustar).
+        // CxC (B15.4): puede ver y ABONAR; NO puede REVERSAR (Admin-only).
         $ventasPermisos = [
             'dashboard.ver',
             'items.ver',
@@ -160,11 +166,14 @@ class RolesAndAdminSeeder extends Seeder
             'cajas.operar',
             'cajas.movimientos',
             'cajas.cerrar',
+            'cxc.ver',
+            'cxc.abonar',
         ];
 
         // Auditor (solo lectura) + consulta de configuración y clientes.
         // Caja (B14): consulta su historial y el global (ver_todas) con acceso
         // de SOLO lectura; jamás abre/opera/cierra.
+        // CxC (B15.4): solo lectura (cxc.ver).
         $auditorPermisos = [
             'dashboard.ver',
             'items.ver',
@@ -176,6 +185,7 @@ class RolesAndAdminSeeder extends Seeder
             'configuracion.ver',
             'cajas.ver',
             'cajas.ver_todas',
+            'cxc.ver',
         ];
 
         // Guard server-side: la Configuración General solo puede editarla Admin.
@@ -191,6 +201,14 @@ class RolesAndAdminSeeder extends Seeder
         // Guard server-side B15.1: creditos.configurar es Admin-only.
         // Cualquier intento de asignarlo a un rol no Admin se rechaza.
         \App\Support\CreditoAcceso::assertRolesSeguros([
+            'Admin' => $perms,
+            'Almacen' => $almacenPermisos,
+            'Ventas' => $ventasPermisos,
+            'Auditor' => $auditorPermisos,
+        ]);
+
+        // Guard server-side B15.4: cxc.reversar_abono es Admin-only.
+        \App\Support\CxCAcceso::assertRolesSeguros([
             'Admin' => $perms,
             'Almacen' => $almacenPermisos,
             'Ventas' => $ventasPermisos,

@@ -40,6 +40,7 @@ dataset('matriz_rol_permisos', [
         'configuracion.ver',
         'cajas.ver',
         'cajas.ver_todas',
+        'cxc.ver',
     ]],
     'Ventas' => ['Ventas', [
         'dashboard.ver',
@@ -55,6 +56,8 @@ dataset('matriz_rol_permisos', [
         'cajas.operar',
         'cajas.movimientos',
         'cajas.cerrar',
+        'cxc.ver',
+        'cxc.abonar',
     ]],
 ]);
 
@@ -88,11 +91,11 @@ it('el fresh no crea permisos huérfanos de ventas, papelera ni catálogos', fun
     ])->count())->toBe(0);
 });
 
-it('la matriz tiene 41 permisos canónicos y Admin reúne los 41', function () {
-    expect(Permission::count())->toBe(41);
+it('la matriz tiene 44 permisos canónicos y Admin reúne los 44', function () {
+    expect(Permission::count())->toBe(44);
 
     $admin = Role::findByName('Admin', 'web');
-    expect($admin->permissions()->count())->toBe(41);
+    expect($admin->permissions()->count())->toBe(44);
 });
 
 it('la escritura de efectivo (entrada/retiro/ajuste) es exclusiva de Admin; Ventas solo consulta', function () {

@@ -540,5 +540,5 @@ it('items.revisar_devolucion se asigna a Admin y Almacen pero no a Ventas/Audito
         expect(Role::findByName($rol, 'web')->hasPermissionTo('items.revisar_devolucion'))->toBeFalse();
     }
 
-    expect(Permission::count())->toBe(41);
+    expect(Permission::count())->toBe(44);
 });

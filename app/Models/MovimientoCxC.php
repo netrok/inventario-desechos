@@ -58,6 +58,7 @@ class MovimientoCxC extends Model
         'referencia',
         'movimiento_origen_id',
         'observaciones',
+        'operacion_uuid',
     ];
 
     protected $casts = [
@@ -99,6 +100,24 @@ class MovimientoCxC extends Model
     public function reversa(): HasOne
     {
         return $this->hasOne(self::class, 'movimiento_origen_id');
+    }
+
+    public function movimientoCaja(): HasOne
+    {
+        return $this->hasOne(MovimientoCaja::class, 'movimiento_cxc_id');
+    }
+
+    /**
+     * La REVERSA_ABONO ancla siempre a un ABONO original. El método económico
+     * de la reversa es un atributo DERIVADO: es el método del ABONO que corrige.
+     */
+    public function metodoOriginal(): ?string
+    {
+        if ($this->tipo === self::TIPO_REVERSA_ABONO && $this->movimientoOrigen !== null) {
+            return $this->movimientoOrigen->metodo;
+        }
+
+        return $this->metodo;
     }
 
     /**

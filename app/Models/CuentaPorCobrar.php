@@ -109,6 +109,23 @@ class CuentaPorCobrar extends Model
     }
 
     /**
+     * VENCIDA es un estado DERIVADO, nunca persistido:
+     * saldo > 0, fecha_vencimiento < hoy y estado != CANCELADA.
+     */
+    public function esVencida(): bool
+    {
+        if ($this->estado === self::ESTADO_CANCELADA || $this->saldo_centavos <= 0) {
+            return false;
+        }
+
+        if ($this->fecha_vencimiento === null) {
+            return false;
+        }
+
+        return $this->fecha_vencimiento->startOfDay()->lt(now()->copy()->startOfDay());
+    }
+
+    /**
      * Estado operativo derivado del saldo para las cuentas NO canceladas.
      *
      * Validación explícita de precondiciones por dominio.

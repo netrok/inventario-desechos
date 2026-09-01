@@ -23,7 +23,8 @@
                     $puedePOS     = auth()->user()->can('ventas.crear');
                     $puedeVentas  = auth()->user()->can('ventas.ver');
                     $puedeClientes= auth()->user()->can('clientes.ver');
-                    $grupoVentas  = $puedePOS || $puedeVentas || $puedeClientes;
+                    $puedeCxc     = auth()->user()->can('cxc.ver');
+                    $grupoVentas  = $puedePOS || $puedeVentas || $puedeClientes || $puedeCxc;
 
                     $puedeCajaVer       = auth()->user()->can('cajas.ver');
                     $puedeCajaConfigurar= auth()->user()->can('cajas.configurar');
@@ -91,7 +92,7 @@
                         <div class="relative" x-data="{ navOpen: false }" @click.outside="navOpen = false">
                             <button @click="navOpen = !navOpen"
                                     type="button"
-                                    class="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-lg {{ request()->routeIs('pos.*', 'ventas.*', 'clientes.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
+                                    class="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-lg {{ request()->routeIs('pos.*', 'ventas.*', 'clientes.*', 'cxc.*') ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100' }}">
                                 Ventas
                                 <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': navOpen }" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -110,6 +111,9 @@
                                 @endif
                                 @if($puedeClientes)
                                     <a href="{{ route('clientes.index') }}" class="block px-4 py-2 text-sm {{ request()->routeIs('clientes.*') ? 'bg-gray-100 font-medium text-gray-900' : 'text-gray-700 hover:bg-gray-50' }}">Clientes</a>
+                                @endif
+                                @if($puedeCxc)
+                                    <a href="{{ route('cxc.index') }}" class="block px-4 py-2 text-sm {{ request()->routeIs('cxc.*') ? 'bg-gray-100 font-medium text-gray-900' : 'text-gray-700 hover:bg-gray-50' }}">Cuentas por cobrar</a>
                                 @endif
                             </div>
                         </div>
@@ -281,9 +285,9 @@
 
             {{-- Ventas (acordeón) --}}
             @if($grupoVentas)
-                <div x-data="{ mOpen: {{ request()->routeIs('pos.*', 'ventas.*', 'clientes.*') ? 'true' : 'false' }} }">
+                <div x-data="{ mOpen: {{ request()->routeIs('pos.*', 'ventas.*', 'clientes.*', 'cxc.*') ? 'true' : 'false' }} }">
                     <button @click="mOpen = !mOpen" type="button"
-                            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium {{ request()->routeIs('pos.*', 'ventas.*', 'clientes.*') ? 'text-gray-900' : 'text-gray-700 hover:bg-gray-100' }}">
+                            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium {{ request()->routeIs('pos.*', 'ventas.*', 'clientes.*', 'cxc.*') ? 'text-gray-900' : 'text-gray-700 hover:bg-gray-100' }}">
                         Ventas
                         <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': mOpen }" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -298,6 +302,9 @@
                         @endif
                         @if($puedeClientes)
                             <a href="{{ route('clientes.index') }}" class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('clientes.*') ? 'bg-gray-100 font-medium text-gray-900' : 'text-gray-700 hover:bg-gray-100' }}">Clientes</a>
+                        @endif
+                        @if($puedeCxc)
+                            <a href="{{ route('cxc.index') }}" class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('cxc.*') ? 'bg-gray-100 font-medium text-gray-900' : 'text-gray-700 hover:bg-gray-100' }}">Cuentas por cobrar</a>
                         @endif
                     </div>
                 </div>

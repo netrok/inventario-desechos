@@ -4,6 +4,7 @@ use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConfiguracionController;
+use App\Http\Controllers\CuentaPorCobrarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\PosController;
@@ -267,6 +268,29 @@ Route::middleware(['auth'])->group(function () {
     Route::get('postventa/{documento}/print', [PostventaController::class, 'print'])
         ->name('postventa.print')
         ->middleware('permission:ventas.ver');
+
+    /**
+     * =========================
+     * Cuentas por cobrar (B15.4): cobranza y abonos
+     * =========================
+     */
+    // El servidor resuelve la sesión de caja del usuario autenticado; el
+    // navegador NUNCA envía sesion_caja_id.
+    Route::get('cxc', [CuentaPorCobrarController::class, 'index'])
+        ->name('cxc.index')
+        ->middleware('permission:cxc.ver');
+
+    Route::get('cxc/{cuenta}', [CuentaPorCobrarController::class, 'show'])
+        ->name('cxc.show')
+        ->middleware('permission:cxc.ver');
+
+    Route::post('cxc/{cuenta}/abonos', [CuentaPorCobrarController::class, 'storeAbono'])
+        ->name('cxc.abonos.store')
+        ->middleware('permission:cxc.abonar');
+
+    Route::post('cxc/{cuenta}/movimientos/{movimiento}/reversar', [CuentaPorCobrarController::class, 'reversarAbono'])
+        ->name('cxc.abonos.reversar')
+        ->middleware('permission:cxc.reversar_abono');
 
     /**
      * =========================

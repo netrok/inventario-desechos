@@ -124,7 +124,15 @@
                     <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div>
                             <div class="text-[11px] text-indigo-600">Folio CxC</div>
-                            <div class="font-semibold text-gray-900">{{ $cxc->folio }}</div>
+                            <div class="font-semibold text-gray-900">
+                                @can('cxc.ver')
+                                    <a href="{{ route('cxc.show', $cxc) }}" class="text-indigo-700 underline decoration-indigo-300 hover:text-indigo-900">
+                                        {{ $cxc->folio }}
+                                    </a>
+                                @else
+                                    {{ $cxc->folio }}
+                                @endcan
+                            </div>
                         </div>
                         <div>
                             <div class="text-[11px] text-indigo-600">Importe financiado</div>
@@ -144,7 +152,8 @@
                         </div>
                     </div>
                     <p class="mt-2 text-[11px] text-indigo-700">
-                        La postventa de esta venta requiere el flujo de cuenta por cobrar (cobranza/abonos en B15.4 y postventa debt-first en B15.5).
+                        Cobranza y abonos disponibles en el módulo de Cuentas por cobrar.
+                        La postventa de esta venta permanece bloqueada hasta B15.5.
                     </p>
                 </div>
             @endif

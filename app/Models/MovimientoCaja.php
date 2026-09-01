@@ -19,6 +19,10 @@ class MovimientoCaja extends Model
 
     public const TIPO_AJUSTE = 'AJUSTE';
 
+    public const TIPO_ABONO_CXC_EFECTIVO = 'ABONO_CXC_EFECTIVO';
+
+    public const TIPO_REVERSA_CXC_EFECTIVO = 'REVERSA_CXC_EFECTIVO';
+
     public const TIPOS = [
         self::TIPO_COBRO_EFECTIVO,
         self::TIPO_CAMBIO_ENTREGADO,
@@ -26,6 +30,8 @@ class MovimientoCaja extends Model
         self::TIPO_RETIRO,
         self::TIPO_REEMBOLSO_EFECTIVO,
         self::TIPO_AJUSTE,
+        self::TIPO_ABONO_CXC_EFECTIVO,
+        self::TIPO_REVERSA_CXC_EFECTIVO,
     ];
 
     public const DIR_ENTRADA = 'ENTRADA';
@@ -45,6 +51,7 @@ class MovimientoCaja extends Model
         'venta_id',
         'pago_venta_id',
         'documento_postventa_id',
+        'movimiento_cxc_id',
         'concepto',
         'referencia',
         'created_at',
@@ -57,6 +64,7 @@ class MovimientoCaja extends Model
         'venta_id' => 'integer',
         'pago_venta_id' => 'integer',
         'documento_postventa_id' => 'integer',
+        'movimiento_cxc_id' => 'integer',
         'created_at' => 'datetime',
     ];
 
@@ -67,8 +75,13 @@ class MovimientoCaja extends Model
     public static function direccionDeTipo(string $tipo, string $ajuste = self::DIR_ENTRADA): string
     {
         return match ($tipo) {
-            self::TIPO_COBRO_EFECTIVO, self::TIPO_ENTRADA_MANUAL => self::DIR_ENTRADA,
-            self::TIPO_CAMBIO_ENTREGADO, self::TIPO_RETIRO, self::TIPO_REEMBOLSO_EFECTIVO => self::DIR_SALIDA,
+            self::TIPO_COBRO_EFECTIVO,
+            self::TIPO_ENTRADA_MANUAL,
+            self::TIPO_ABONO_CXC_EFECTIVO => self::DIR_ENTRADA,
+            self::TIPO_CAMBIO_ENTREGADO,
+            self::TIPO_RETIRO,
+            self::TIPO_REEMBOLSO_EFECTIVO,
+            self::TIPO_REVERSA_CXC_EFECTIVO => self::DIR_SALIDA,
             self::TIPO_AJUSTE => $ajuste === self::DIR_SALIDA ? self::DIR_SALIDA : self::DIR_ENTRADA,
             default => throw new \DomainException("Tipo de movimiento desconocido: {$tipo}."),
         };
@@ -87,6 +100,11 @@ class MovimientoCaja extends Model
     public function pago(): BelongsTo
     {
         return $this->belongsTo(PagoVenta::class, 'pago_venta_id');
+    }
+
+    public function movimientoCxC(): BelongsTo
+    {
+        return $this->belongsTo(MovimientoCxC::class, 'movimiento_cxc_id');
     }
 
     public function esEntrada(): bool
