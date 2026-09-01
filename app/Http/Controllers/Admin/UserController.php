@@ -129,6 +129,12 @@ class UserController extends Controller
             return back()->with('error', 'No se puede eliminar este usuario porque tiene movimientos registrados.');
         }
 
+        // No borrar un usuario con movimientos CxC: perdería el actor del
+        // ledger económico de la deuda. El FK RESTRICT lo respalda además.
+        if ($user->movimientosCxc()->exists()) {
+            return back()->with('error', 'No se puede eliminar este usuario porque tiene movimientos CxC registrados.');
+        }
+
         $user->delete();
 
         return redirect()

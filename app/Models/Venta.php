@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 class Venta extends Model
@@ -105,6 +106,11 @@ class Venta extends Model
     public function pagos(): HasMany
     {
         return $this->hasMany(PagoVenta::class, 'venta_id')->orderBy('orden')->orderBy('id');
+    }
+
+    public function cuentaPorCobrar(): HasOne
+    {
+        return $this->hasOne(CuentaPorCobrar::class, 'venta_id');
     }
 
     /**

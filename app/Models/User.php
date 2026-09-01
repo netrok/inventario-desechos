@@ -62,4 +62,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(DocumentoPostventa::class, 'user_id');
     }
+
+    public function movimientosCxc(): HasMany
+    {
+        return $this->hasMany(MovimientoCxC::class, 'user_id');
+    }
 }

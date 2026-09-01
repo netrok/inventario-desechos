@@ -69,6 +69,11 @@ class Cliente extends Model
         return $this->hasMany(Venta::class, 'cliente_id');
     }
 
+    public function cuentasPorCobrar(): HasMany
+    {
+        return $this->hasMany(CuentaPorCobrar::class, 'cliente_id');
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
