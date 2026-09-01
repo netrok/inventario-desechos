@@ -11,8 +11,10 @@ use App\Models\SesionCaja;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Services\CajaService;
+use App\Services\CuentaPorCobrarService;
 use App\Support\ItemCodigo;
 use App\Support\Money;
+use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +26,12 @@ class PosController extends Controller
     private const CART_KEY = 'pos.cart';
 
     private const CLIENTE_KEY = 'pos.cliente_id';
+
+    /**
+     * Máximo monetario en centavos consistente con la precisión de BD
+     * decimal(12,2) → 9,999,999,999.99 = 999,999,999,999 centavos.
+     */
+    private const MAX_MONETARIO_CENTAVOS = 999999999999;
 
     private function cartIds(): array
     {
@@ -109,11 +117,39 @@ class PosController extends Controller
             }
         });
 
+        // Snapshot informativo de crédito del cliente seleccionado (SOLO UI).
+        // Nunca es autoridad: la validación final vive en CuentaPorCobrarService
+        // bajo el lock del Cliente. Disponible = límite - exposición actual
+        // (en centavos enteros).
+        $cliente = $this->clienteSeleccionado();
+        $creditoInfo = null;
+
+        if ($cliente instanceof Cliente && $cliente->credito_habilitado) {
+            $limiteCentavos = $cliente->limite_credito !== null
+                ? Money::aCentavos($cliente->limite_credito)
+                : 0;
+
+            $exposicionCentavos = $cliente->credito_habilitado
+                ? (int) \App\Models\CuentaPorCobrar::query()
+                    ->where('cliente_id', $cliente->id)
+                    ->where('saldo_centavos', '>', 0)
+                    ->sum('saldo_centavos')
+                : 0;
+
+            $creditoInfo = [
+                'habilitado' => $cliente->credito_habilitado,
+                'limite_centavos' => $limiteCentavos,
+                'dias_credito' => $cliente->dias_credito,
+                'disponible_centavos' => max(0, $limiteCentavos - $exposicionCentavos),
+            ];
+        }
+
         return view('pos.index', [
             'items' => $items->values(),
             'total' => Money::aPrecio($totalCentavos),
             'metodosPago' => PagoVenta::METODOS,
-            'cliente' => $this->clienteSeleccionado(),
+            'cliente' => $cliente,
+            'creditoInfo' => $creditoInfo,
             'sesionCaja' => app(CajaService::class)->sesionAbiertaDe(Auth::user()),
         ]);
     }
@@ -215,20 +251,32 @@ class PosController extends Controller
     }
 
     /**
-     * Confirmación de venta atómica (B14).
+     * Confirmación de venta atómica (B14 + B15.3 crédito/CxC).
      *
-     * - Requiere una sesión de caja ABIERTA del usuario operador. Si no la hay
-     *   la venta NO se crea (error controlado, el carrito se conserva).
+     * - Requiere una sesión de caja ABIERTA y asignada del usuario operador. Si
+     *   no la hay la venta NO se crea (error controlado, el carrito se
+     *   conserva). Esto aplica TAMBIÉN a una venta 100% crédito: la sesión es
+     *   contexto operacional/auditable del POS, aunque no haya movimiento
+     *   físico de efectivo (B14.3.1 intacto).
      * - Total, precios y pagos SIEMPRE se calculan/revalidan en el servidor.
-     * - Los pagos deben cubrir exactamente el total (sin crédito habilitado);
-     *   el efectivo recibido/cambio se revalidan server-side.
+     * - CRÉDITO NO vive en pagos_venta: llega por un campo SEPARADO
+     *   credito_monto, normalizado a centavos SIN float vía Money::aCentavos.
+     *   La cobertura debe cumplir EXACTAMENTE:
+     *     pagosRealesCentavos === importeRealEsperado (= total - credito)
+     * - Sin crédito se preserva B14: SIEMPRE debe enviarse al menos un pago real
+     *   (B15.3 no introduce ventas gratuitas implícitas).
+     * - Si credito > 0 se origina CuentaPorCobrar vía CuentaPorCobrarService
+     *   (B15.2 intacto) dentro de la MISMA transacción; cualquier DomainException
+     *   económica se convierte en ValidationException controlada y provoca
+     *   rollback TOTAL (Venta, detalles, item, pagos, caja, CxC y ledger).
+     * - ventas.forma_pago se DERIVA server-side:
+     *     credito == 0            -> comportamiento B14 (único método o MIXTO)
+     *     credito > 0 && real > 0 -> MIXTO
+     *     credito == total        -> CREDITO
      * - Orden de locks determinista:
      *     1) Sesión de caja (lockForUpdate + revalidación ABIERTA)
-     *     2) Cliente (lockForUpdate)
+     *     2) Cliente (lockForUpdate + revalidación ACTIVO; mutex de exposición)
      *     3) Items ordenados por id (lockForUpdate)
-     *   Postventa bloquea Venta->Detalle->Item (mismo orden de sesión primero
-     *   cuando hay reembolso en efectivo), sin ciclos de deadlock.
-     * - ventas.forma_pago se DERIVA de los pagos (único método, o MIXTO).
      */
     public function checkout(Request $request)
     {
@@ -236,11 +284,24 @@ class PosController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*' => ['required', 'integer', 'distinct'],
             'notas' => ['nullable', 'string', 'max:1000'],
-            'pagos' => ['required', 'array', 'min:1'],
+            // B15.3: pagos reales son OPCIONALES (una venta puede ser 100% crédito),
+            // pero todo pago real enviado conserva sus reglas B14.
+            'pagos' => ['array'],
             'pagos.*.metodo' => ['required', Rule::in(PagoVenta::METODOS)],
             'pagos.*.monto_aplicado' => ['required', 'numeric', 'min:0.01'],
             'pagos.*.efectivo_recibido' => ['nullable', 'numeric', 'min:0'],
             'pagos.*.referencia' => ['nullable', 'string', 'max:100'],
+            // CREDITO como componente de DEUDA separado, nunca dentro de pagos.
+            // Barrera HTTP previa a Money: credito_monto es PESOS/una unidad
+            // decimal; su máximo decimal(12,2) en esta capa es 9999999999.99,
+            // antes de llegar al cast entero de Money. MAX_MONETARIO_CENTAVOS
+            // se mantiene como segunda defensa tras Money::aCentavos.
+            'credito_monto' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:9999999999.99',
+            ],
         ]);
 
         $clienteId = (int) session(self::CLIENTE_KEY, 0);
@@ -340,10 +401,11 @@ class PosController extends Controller
                 $totalCentavos += Money::aCentavos($item->precio);
             }
 
-            // Normalización server-side de los pagos a centavos enteros.
+            // Normalización server-side de los pagos REALES a centavos enteros.
+            // Puede estar vacío en una venta 100% crédito.
             $pagosCentavos = [];
 
-            foreach ($data['pagos'] as $pago) {
+            foreach ($data['pagos'] ?? [] as $pago) {
                 $metodo = $pago['metodo'];
                 $montoCentavos = Money::aCentavos($pago['monto_aplicado']);
 
@@ -375,8 +437,84 @@ class PosController extends Controller
                 ];
             }
 
-            // ventas.forma_pago derivado de los pagos: método único o MIXTO.
+            // Normalización server-side del CRÉDITO (componente de DEUDA separado).
+            // Política monetaria SIN float: null / '' -> 0; el resto se convierte
+            // a centavos enteros con Money::aCentavos ("0", "0.0", "0.00" -> 0).
+            // Un valor inválido (más de 2 decimales, no numérico, notación
+            // científica como "1e2") lanza \UnexpectedValueException y se traduce
+            // en ValidationException CONTROLADA (nunca un 500).
+            $creditoCentavos = 0;
+
+            $creditoBruto = $data['credito_monto'] ?? null;
+
+            if ($creditoBruto !== null && trim((string) $creditoBruto) !== '') {
+                try {
+                    $creditoCentavos = Money::aCentavos($creditoBruto);
+                } catch (\UnexpectedValueException) {
+                    throw ValidationException::withMessages([
+                        'credito_monto' => 'El monto a crédito debe ser un importe válido con máximo 2 decimales.',
+                    ]);
+                }
+            }
+
+            // Máximo consistente con la precisión monetaria real del proyecto/BD
+            // (todas las columnas monetarias son decimal(12,2)).
+            if (abs($creditoCentavos) > self::MAX_MONETARIO_CENTAVOS) {
+                throw ValidationException::withMessages([
+                    'credito_monto' => 'El monto a crédito excede la precisión monetaria permitida.',
+                ]);
+            }
+
+            if ($creditoCentavos > $totalCentavos) {
+                throw ValidationException::withMessages([
+                    'credito_monto' => 'El monto a crédito no puede exceder el total de la venta.',
+                ]);
+            }
+
+            // Pagos reales y su importe esperado DERIVADO de fuentes autoritativas:
+            //   importeRealEsperado = total - credito
+            // CobrarVenta recibe ese esperado (no el mismo dato que se valida).
+            $pagosRealesCentavos = array_sum(array_map(
+                fn (array $pago) => Money::aCentavos($pago['monto_aplicado']),
+                $pagosCentavos
+            ));
+
+            $importeRealEsperadoCentavos = $totalCentavos - $creditoCentavos;
+
+            // Invariante explícito: pagos reales deben ser EXACTAMENTE lo que la
+            // venta espera cobrar (equivale a pagosReales + credito === total).
+            if ($pagosRealesCentavos !== $importeRealEsperadoCentavos) {
+                $faltante = $importeRealEsperadoCentavos - $pagosRealesCentavos;
+
+                throw ValidationException::withMessages([
+                    'pagos' => $faltante > 0
+                        ? 'Los pagos (reales + crédito) no cubren el total de la venta.'
+                        : 'Los pagos (reales + crédito) superan el total de la venta.',
+                ]);
+            }
+
+            // Preservación B14 sin crédito: si no hay crédito, SIEMPRE debe ir al
+            // menos un pago real. B15.3 no introduce ventas gratuitas implícitas,
+            // ni siquiera cuando el total es 0.
+            if ($creditoCentavos === 0 && $pagosCentavos === []) {
+                throw ValidationException::withMessages([
+                    'pagos' => 'Debe enviarse al menos un pago real cuando no hay crédito.',
+                ]);
+            }
+
+            // ventas.forma_pago derivado SERVER-SIDE (B15.3), nunca del navegador:
+            //   credito == 0            -> comportamiento B14 (único método real o MIXTO)
+            //   credito > 0 && real > 0 -> MIXTO
+            //   credito == total        -> CREDITO (0 pagos reales)
             $metodos = array_values(array_unique(array_column($pagosCentavos, 'metodo')));
+
+            if ($creditoCentavos > 0 && $pagosRealesCentavos > 0) {
+                $formaPago = 'MIXTO';
+            } elseif ($creditoCentavos > 0 && $pagosRealesCentavos === 0) {
+                $formaPago = 'CREDITO';
+            } else {
+                $formaPago = count($metodos) === 1 ? $metodos[0] : 'MIXTO';
+            }
 
             // Snapshot del cliente AL MOMENTO de la venta (server-side, desde el
             // Cliente bloqueado). NO se reescribe posteriormente ni al editar el Cliente.
@@ -390,7 +528,7 @@ class PosController extends Controller
                 'cliente_email' => $cliente->email,
                 'cliente_tipo' => $cliente->tipo,
                 'total' => Money::aPrecio($totalCentavos),
-                'forma_pago' => count($metodos) === 1 ? $metodos[0] : 'MIXTO',
+                'forma_pago' => $formaPago,
                 'notas' => $data['notas'] ?? null,
             ]);
 
@@ -416,9 +554,37 @@ class PosController extends Controller
                 ]);
             }
 
-            // Cobro: pagos + movimientos físicos de efectivo. Valida que la
-            // suma cubra exactamente el total (sin crédito en B14).
-            app(CajaService::class)->cobrarVenta($venta, $sesion, Auth::user(), $pagosCentavos, $totalCentavos);
+            // B15.3 paso 18: si hay crédito, origina la CuentaPorCobrar dentro de
+            // la MISMA transacción bajo el lock del Cliente (mutex de exposición).
+            // CuentaPorCobrarService ejecuta sus propias validaciones y locks
+            // (B15.2 intacto). Cualquier DomainException económica se convierte en
+            // ValidationException CONTROLADA y provoca rollback TOTAL del checkout.
+            if ($creditoCentavos > 0) {
+                try {
+                    app(CuentaPorCobrarService::class)->crearParaVenta(
+                        $venta,
+                        $creditoCentavos,
+                        Auth::user()
+                    );
+                } catch (DomainException $e) {
+                    throw ValidationException::withMessages([
+                        'credito_monto' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // B15.3 paso 19: cobro de los pagos REALES. El último argumento es el
+            // importe REAL esperado DERIVADO (total - crédito), no el total ni el
+            // mismo dato que se validó como suma de pagos. En una venta 100%
+            // crédito es 0 -> no se crea PagoVenta ni MovimientoCaja. Caja física
+            // SOLO ve dinero real.
+            app(CajaService::class)->cobrarVenta(
+                $venta,
+                $sesion,
+                Auth::user(),
+                $pagosCentavos,
+                $importeRealEsperadoCentavos
+            );
 
             return $venta;
         });

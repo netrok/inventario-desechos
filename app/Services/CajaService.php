@@ -97,18 +97,35 @@ class CajaService
     }
 
     /**
-     * Registra los pagos de una venta ya persistida (debe ejecutarse DENTRO
-     * de la transacción del checkout, con la sesión ya bloqueada). Valida que
-     * la suma de pagos cubra exactamente el total (crédito deshabilitado) y
-     * crea los movimientos físicos de efectivo (cobro + cambio).
+     * Registra los pagos REALES de una venta ya persistida (debe ejecutarse
+     * DENTRO de la transacción del checkout, con la sesión ya bloqueada).
+     *
+     * B15.3 — Crédito: PagoVenta representa EXCLUSIVAMENTE el dinero realmente
+     * cobrado (EFECTIVO/TARJETA/TRANSFERENCIA). El último argumento ya no es el
+     * total de la venta, sino el importe REAL esperado a cobrar
+     * ($importeRealEsperadoCentavos). Cuando la venta es 100% crédito ese
+     * importe real esperado es 0 y $pagosCentavos va vacío: se crean 0
+     * PagoVenta y 0 MovimientoCaja (el crédito vive en CuentaPorCobrar).
      *
      * @param  array<int, array{metodo: string, monto_aplicado: int|string, efectivo_recibido: int|string|null, referencia: string|null}>  $pagosCentavos
      * @return array{pagos: \Illuminate\Support\Collection, movimientos: \Illuminate\Support\Collection}
      */
-    public function cobrarVenta(Venta $venta, SesionCaja $sesion, User $user, array $pagosCentavos, int $totalCentavos): array
+    public function cobrarVenta(Venta $venta, SesionCaja $sesion, User $user, array $pagosCentavos, int $importeRealEsperadoCentavos): array
     {
         if (! $sesion->estaAbierta()) {
             throw new DomainException('La sesión de caja ya fue cerrada; no puede registrarse un cobro.');
+        }
+
+        if ($importeRealEsperadoCentavos < 0) {
+            throw new DomainException('El importe real esperado a cobrar no puede ser negativo.');
+        }
+
+        if ($importeRealEsperadoCentavos === 0 && $pagosCentavos !== []) {
+            throw new DomainException('No se espera cobro real; no pueden registrarse pagos.');
+        }
+
+        if ($importeRealEsperadoCentavos > 0 && $pagosCentavos === []) {
+            throw new DomainException('No se envió ningún pago real para el importe esperado.');
         }
 
         $aplicadoCentavos = 0;
@@ -140,13 +157,13 @@ class CajaService
             $aplicadoCentavos += $montoCentavos;
         }
 
-        if ($aplicadoCentavos !== $totalCentavos) {
-            $faltante = $totalCentavos - $aplicadoCentavos;
+        if ($aplicadoCentavos !== $importeRealEsperadoCentavos) {
+            $faltante = $importeRealEsperadoCentavos - $aplicadoCentavos;
 
             throw new DomainException(
                 $faltante > 0
-                    ? 'Los pagos no cubren el total de la venta. Revísalo e inténtalo de nuevo.'
-                    : 'Los pagos superan el total de la venta. Revísalo e inténtalo de nuevo.'
+                    ? 'Los pagos no cubren el importe real esperado. Revísalo e inténtalo de nuevo.'
+                    : 'Los pagos superan el importe real esperado. Revísalo e inténtalo de nuevo.'
             );
         }
 

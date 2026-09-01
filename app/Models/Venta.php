@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 class Venta extends Model
 {
-    public const FORMAS_PAGO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'MIXTO', 'OTRO'];
+    public const FORMAS_PAGO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'MIXTO', 'CREDITO', 'OTRO'];
 
     public const ESTADO_ACTIVA = 'ACTIVA';
 

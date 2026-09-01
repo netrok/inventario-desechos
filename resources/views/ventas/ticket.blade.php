@@ -158,21 +158,33 @@
                     @foreach($venta->pagos as $pago)
                         <div class="row">
                             <span class="k">{{ $pago->metodo }}</span>
-                            <span class="v">{{ number_format((float) $pago->monto_aplicado, 2) }}</span>
+                            <span class="v">{{ \App\Support\Money::formatear((string) $pago->monto_aplicado) }}</span>
                         </div>
-                        @if($pago->efectivo_recibido !== null && $pago->efectivo_recibido > 0)
+                        @if($pago->efectivo_recibido !== null && \App\Support\Money::aCentavos((string) $pago->efectivo_recibido) > 0)
                             <div class="row">
                                 <span class="k">&nbsp;&nbsp;Recibido</span>
-                                <span class="v">{{ number_format((float) $pago->efectivo_recibido, 2) }}</span>
+                                <span class="v">{{ \App\Support\Money::formatear((string) $pago->efectivo_recibido) }}</span>
                             </div>
                         @endif
-                        @if($pago->cambio_entregado !== null && $pago->cambio_entregado > 0)
+                        @if($pago->cambio_entregado !== null && \App\Support\Money::aCentavos((string) $pago->cambio_entregado) > 0)
                             <div class="row">
                                 <span class="k">&nbsp;&nbsp;Cambio</span>
-                                <span class="v cambio">{{ number_format((float) $pago->cambio_entregado, 2) }}</span>
+                                <span class="v cambio">{{ \App\Support\Money::formatear((string) $pago->cambio_entregado) }}</span>
                             </div>
                         @endif
                     @endforeach
+                </div>
+            @endif
+
+            @if($venta->cuentaPorCobrar)
+                @php $cxc = $venta->cuentaPorCobrar; @endphp
+                <div class="pagos">
+                    <div class="titulo">Crédito (CxC)</div>
+                    <div class="row"><span class="k">Folio</span><span class="v">{{ $cxc->folio }}</span></div>
+                    <div class="row"><span class="k">Financiado</span><span class="v">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->importe_original_centavos)) }}</span></div>
+                    <div class="row"><span class="k">Saldo</span><span class="v">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->saldo_centavos)) }}</span></div>
+                    <div class="row"><span class="k">Vence</span><span class="v">{{ $cxc->fecha_vencimiento?->format('Y-m-d') }}</span></div>
+                    <div class="row"><span class="k">Plazo</span><span class="v">{{ $cxc->dias_credito_aplicados }} día(s)</span></div>
                 </div>
             @endif
 

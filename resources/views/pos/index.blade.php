@@ -262,6 +262,54 @@
                                         </div>
                                     </div>
 
+                                    {{-- CRÉDITO (B15.3): componente de DEUDA separado, nunca en pagos reales --}}
+                                    <div data-credito-cont
+                                         class="rounded-lg border {{ $creditoInfo['habilitado'] ?? false ? 'border-indigo-200 bg-indigo-50' : 'border-gray-200 bg-gray-50' }} p-3 space-y-2">
+                                        <div class="flex items-center justify-between">
+                                            <label class="text-xs font-semibold {{ $creditoInfo['habilitado'] ?? false ? 'text-indigo-800' : 'text-gray-500' }}">
+                                                Crédito
+                                            </label>
+                                            @if($creditoInfo && $creditoInfo['habilitado'])
+                                                <span class="text-[11px] text-indigo-700">Disponible estimado: <strong>{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($creditoInfo['disponible_centavos'])) }}</strong></span>
+                                            @endif
+                                        </div>
+
+                                        @if($creditoInfo && $creditoInfo['habilitado'])
+                                            <div class="grid grid-cols-2 gap-2 text-[11px] text-indigo-800">
+                                                <div>Límite: {{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($creditoInfo['limite_centavos'])) }}</div>
+                                                <div>Plazo: {{ $creditoInfo['dias_credito'] }} día(s)</div>
+                                            </div>
+                                            <div>
+                                                <label for="credito_monto" class="block text-[11px] font-medium text-indigo-700 mb-1">Monto a crédito (0 / parcial / total)</label>
+                                                <input
+                                                    id="credito_monto"
+                                                    name="credito_monto"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value="{{ old('credito_monto', '') }}"
+                                                    placeholder="0.00"
+                                                    autocomplete="off"
+                                                    data-credito-monto
+                                                    class="w-full rounded-lg border-indigo-300 text-sm focus:border-indigo-600 focus:ring-indigo-600"
+                                                >
+                                            </div>
+                                            <p data-estado-credito role="status" aria-live="polite" class="text-[11px] text-indigo-700" style="min-height:1rem"></p>
+                                        @else
+                                            <p class="text-[11px] text-gray-500">
+                                                Este cliente no tiene crédito habilitado. La venta se registra solo con pagos reales.
+                                            </p>
+                                        @endif
+                                    </div>
+
+                                    {{-- Resumen visual (UX; el servidor es autoridad) --}}
+                                    <div data-resumen-cont class="hidden rounded-lg border border-gray-200 bg-white p-3 text-xs space-y-1">
+                                        <div class="flex justify-between"><span class="text-gray-500">Total</span><span class="font-semibold text-gray-900" data-resumen-total>$0.00</span></div>
+                                        <div class="flex justify-between"><span class="text-gray-500">Pagos reales</span><span class="font-semibold text-emerald-700" data-resumen-pagos>$0.00</span></div>
+                                        <div class="flex justify-between"><span class="text-gray-500">A crédito</span><span class="font-semibold text-indigo-700" data-resumen-credito>$0.00</span></div>
+                                        <div class="flex justify-between border-t border-gray-100 pt-1"><span class="text-gray-500">Pendiente por cubrir</span><span class="font-semibold text-rose-700" data-resumen-pendiente>$0.00</span></div>
+                                    </div>
+
                                     <div>
                                         <label for="notas" class="block text-xs font-medium text-gray-600 mb-1">Notas (opcional)</label>
                                         <textarea
@@ -452,9 +500,22 @@
             const cambioCont = document.querySelector('[data-cambio-cont]');
             const cambioTotal = document.querySelector('[data-cambio-total]');
             const botonPagar = document.querySelector('[data-boton-pagar]');
+            const creditoInput = document.querySelector('[data-credito-monto]');
+            const estadoCredito = document.querySelector('[data-estado-credito]');
+            const resumenCont = document.querySelector('[data-resumen-cont]');
+            const resumenTotal = document.querySelector('[data-resumen-total]');
+            const resumenPagos = document.querySelector('[data-resumen-pagos]');
+            const resumenCredito = document.querySelector('[data-resumen-credito]');
+            const resumenPendiente = document.querySelector('[data-resumen-pendiente]');
             if (!cont || !totalEl) return;
 
+            const creditHabilitado = {{ ($creditoInfo['habilitado'] ?? false) ? 'true' : 'false' }};
             const totalCentavos = MoneyCentavos(totalEl.textContent);
+
+            function creditoCentavosActivo() {
+                if (!creditHabilitado || !creditoInput) return 0;
+                return Math.max(0, MoneyCentavos(creditoInput.value || '0'));
+            }
 
             function MoneyCentavos(str) {
                 const num = parseFloat(String(str).replace(/[^0-9.\-]/g, ''));
@@ -574,8 +635,10 @@
                 });
             }
 
-            // Semilla: primer pago en EFECTIVO si no viene del servidor.
-            if (cont.children.length === 0) {
+            // Semilla: primer pago en EFECTIVO solo cuando el crédito está
+            // deshabilitado. Con crédito habilitado el usuario decide: puede
+            // registrar 100% crédito sin filas de pago, o agregarlas para mixto.
+            if (cont.children.length === 0 && !creditHabilitado) {
                 cont.appendChild(crearFila('EFECTIVO'));
             }
 
@@ -605,7 +668,25 @@
                     }
                 });
 
-                const faltante = totalCentavos - aplicado;
+                const credito = creditoCentavosActivo();
+                const faltante = totalCentavos - aplicado - credito;
+
+                // Resumen visual (UX; el servidor es la autoridad).
+                if (resumenCont) {
+                    resumenTotal && (resumenTotal.textContent = fmt(totalCentavos));
+                    resumenPagos && (resumenPagos.textContent = fmt(aplicado));
+                    resumenCredito && (resumenCredito.textContent = fmt(credito));
+                    resumenPendiente && (resumenPendiente.textContent = fmt(Math.max(0, faltante)));
+                    resumenCont.classList.remove('hidden');
+                }
+
+                if (creditHabilitado && creditoInput) {
+                    if (credito > totalCentavos) {
+                        estadoCredito && (estadoCredito.textContent = 'El crédito supera el total.');
+                    } else {
+                        estadoCredito && (estadoCredito.textContent = '');
+                    }
+                }
 
                 if (faltante > 0) {
                     estadoPagos.textContent = 'Faltan ' + fmt(faltante) + ' por cubrir del total.';
@@ -630,6 +711,10 @@
                     const sinSesion = {{ $sesionCaja ? 'false' : 'true' }};
                     botonPagar && (botonPagar.disabled = sinSesion);
                 }
+            }
+
+            if (creditoInput) {
+                creditoInput.addEventListener('input', recalcular);
             }
 
             renumerar();

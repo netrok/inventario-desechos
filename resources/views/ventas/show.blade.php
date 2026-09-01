@@ -24,7 +24,7 @@
                     Ticket 58 mm
                 </a>
                 @can('ventas.devolver')
-                    @if($venta->esElegibleParaDevolucion())
+                    @if($venta->esElegibleParaDevolucion() && ! $venta->cuentaPorCobrar)
                         <a href="{{ route('ventas.devolver', $venta) }}"
                            class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100">
                             Devolver equipos
@@ -32,7 +32,7 @@
                     @endif
                 @endcan
                 @can('ventas.cancelar')
-                    @if($venta->esElegibleParaCancelacion())
+                    @if($venta->esElegibleParaCancelacion() && ! $venta->cuentaPorCobrar)
                         <a href="{{ route('ventas.cancelar', $venta) }}"
                            class="inline-flex items-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800 hover:bg-rose-100">
                             Cancelar venta
@@ -114,6 +114,41 @@
                 </div>
             </div>
 
+            @if($venta->cuentaPorCobrar)
+                @php $cxc = $venta->cuentaPorCobrar; @endphp
+                <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                    <div class="flex items-center justify-between">
+                        <div class="text-xs text-indigo-700 uppercase tracking-wide">Cuenta por cobrar (crédito)</div>
+                        <span class="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">{{ $cxc->estado }}</span>
+                    </div>
+                    <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div>
+                            <div class="text-[11px] text-indigo-600">Folio CxC</div>
+                            <div class="font-semibold text-gray-900">{{ $cxc->folio }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-indigo-600">Importe financiado</div>
+                            <div class="font-semibold text-gray-900">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->importe_original_centavos)) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-indigo-600">Saldo actual</div>
+                            <div class="font-semibold text-gray-900">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->saldo_centavos)) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-indigo-600">Fecha de vencimiento</div>
+                            <div class="font-semibold text-gray-900">{{ $cxc->fecha_vencimiento?->format('Y-m-d') }}</div>
+                        </div>
+                        <div class="md:col-span-4">
+                            <div class="text-[11px] text-indigo-600">Plazo aplicado</div>
+                            <div class="font-semibold text-gray-900">{{ $cxc->dias_credito_aplicados }} día(s)</div>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-[11px] text-indigo-700">
+                        La postventa de esta venta requiere el flujo de cuenta por cobrar (cobranza/abonos en B15.4 y postventa debt-first en B15.5).
+                    </p>
+                </div>
+            @endif
+
             {{-- Artículos vendidos --}}
             <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -154,6 +189,69 @@
                         </tr>
                     </tfoot>
                 </table>
+            </div>
+
+            {{-- Pagos reales (B15.3): desglose READ-ONLY de lo efectivamente cobrado.
+                 El crédito nunca es un PagoVenta; se muestra en el bloque CxC. --}}
+            @php
+                $pagosRealesCentavos = $venta->pagos->reduce(
+                    fn (int $acc, $p) => $acc + \App\Support\Money::aCentavos((string) $p->monto_aplicado),
+                    0
+                );
+                $creditoVentaCentavos = $venta->cuentaPorCobrar
+                    ? (int) $venta->cuentaPorCobrar->importe_original_centavos
+                    : 0;
+            @endphp
+            <div class="rounded-2xl border border-gray-200 bg-white p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Pagos reales</div>
+
+                @if($venta->pagos->isNotEmpty())
+                    @if($creditoVentaCentavos > 0)
+                        <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                            <div class="text-gray-600">
+                                Total <span class="float-right font-semibold text-gray-900">{{ \App\Support\Money::formatear((string) $venta->total) }}</span>
+                            </div>
+                            <div class="text-gray-600">
+                                Pagos reales <span class="float-right font-semibold text-gray-900">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($pagosRealesCentavos)) }}</span>
+                            </div>
+                            <div class="text-indigo-700">
+                                Crédito <span class="float-right font-semibold text-indigo-800">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($creditoVentaCentavos)) }}</span>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="mt-3 divide-y divide-gray-100">
+                        @foreach($venta->pagos as $pago)
+                            <div class="flex flex-wrap items-center justify-between py-2 text-sm">
+                                <div>
+                                    <span class="font-medium text-gray-900">{{ $pago->metodo }}</span>
+                                    @if($pago->referencia)
+                                        <span class="ml-2 text-xs text-gray-400">Ref: {{ $pago->referencia }}</span>
+                                    @endif
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-semibold text-gray-900">{{ \App\Support\Money::formatear((string) $pago->monto_aplicado) }}</span>
+                                    @if($pago->metodo === 'EFECTIVO' && $pago->efectivo_recibido !== null && \App\Support\Money::aCentavos((string) $pago->efectivo_recibido) > 0)
+                                        <div class="text-xs text-gray-400">
+                                            Recibido {{ \App\Support\Money::formatear((string) $pago->efectivo_recibido) }}
+                                            @if($pago->cambio_entregado !== null && \App\Support\Money::aCentavos((string) $pago->cambio_entregado) > 0)
+                                                · Cambio {{ \App\Support\Money::formatear((string) $pago->cambio_entregado) }}
+                                            @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @elseif($venta->cuentaPorCobrar)
+                    <p class="mt-2 text-sm text-gray-500">
+                        Sin pagos reales — venta 100% a crédito.
+                    </p>
+                @else
+                    <p class="mt-2 text-sm text-gray-500">
+                        Venta histórica / legacy sin desglose de pagos.
+                    </p>
+                @endif
             </div>
 
             @if($venta->notas)

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CuentaPorCobrar;
 use App\Models\DocumentoPostventa;
 use App\Models\DocumentoPostventaDetalle;
 use App\Models\Item;
@@ -61,6 +62,8 @@ class PostventaService
          * Preflight sin lock únicamente para determinar si debemos bloquear
          * PRIMERO una sesión de caja. Todo se revalida dentro de la transacción.
          */
+        $this->interlockCredito($venta->id);
+
         $pagosPreflight = $this->pagosVenta($venta->id);
         $tipoPagosPreflight = $this->clasificarPagos($pagosPreflight);
 
@@ -88,6 +91,8 @@ class PostventaService
             $venta = Venta::query()
                 ->lockForUpdate()
                 ->findOrFail($venta->getKey());
+
+            $this->interlockCredito($venta->id);
 
             $pagos = $this->pagosVenta($venta->id, true);
             $tipoPagos = $this->clasificarPagos($pagos);
@@ -223,6 +228,8 @@ class PostventaService
             throw new DomainException('Selecciona al menos un equipo a devolver.');
         }
 
+        $this->interlockCredito($venta->id);
+
         $pagosPreflight = $this->pagosVenta($venta->id);
         $tipoPagosPreflight = $this->clasificarPagos($pagosPreflight);
 
@@ -251,6 +258,8 @@ class PostventaService
             $venta = Venta::query()
                 ->lockForUpdate()
                 ->findOrFail($venta->getKey());
+
+            $this->interlockCredito($venta->id);
 
             $pagos = $this->pagosVenta($venta->id, true);
             $tipoPagos = $this->clasificarPagos($pagos);
@@ -623,6 +632,29 @@ class PostventaService
          * y no admite MIXTO. El detalle autoritativo vive en reembolsos_postventa.
          */
         return null;
+    }
+
+    /**
+     * INTERLOCK TEMPORAL B15.3 (se mantiene durante B15.4; se sustituye en B15.5).
+     *
+     * La postventa de una venta con CuentaPorCobrar queda BLOQUEADA: no puede
+     * cancelarse ni devolverse. Esto NO cambia en B15.4 (cobranza / ABONOS CxC),
+     * donde el interlock sigue vigente; se reemplaza por el flujo correcto al
+     * implementar B15.5 (postventa debt-first). Sin este candado, una venta 100%
+     * crédito (que tiene 0 PagoVenta) sería clasificada por clasificarPagos()
+     * como LEGACY y se permitiría un reembolso manual sobre dinero que NUNCA fue
+     * pagado.
+     *
+     * No reduce deuda, no cancela CxC, no reembolsa crédito, no crea
+     * REDUCCION_POSTVENTA ni CANCELACION de CxC: solo bloqueo seguro temporal.
+     */
+    private function interlockCredito(int $ventaId): void
+    {
+        if (CuentaPorCobrar::query()->where('venta_id', $ventaId)->exists()) {
+            throw new DomainException(
+                'La postventa de ventas con crédito requiere el flujo de cuenta por cobrar.'
+            );
+        }
     }
 
     /**
