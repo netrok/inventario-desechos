@@ -48,6 +48,31 @@
                     <x-input-error :messages="$errors->get('descripcion')" class="mt-1" />
                 </div>
 
+                <div class="space-y-1">
+                    <label for="usuario_asignado_id" class="block text-sm font-semibold text-gray-900">Usuario operador</label>
+                    @if($caja->sesionesAbiertas->isNotEmpty())
+                        <input type="hidden" name="usuario_asignado_id" value="{{ $caja->usuario_asignado_id }}">
+                    @endif
+                    <select id="usuario_asignado_id" name="usuario_asignado_id"
+                            @if($caja->sesionesAbiertas->isNotEmpty()) disabled class="w-full rounded-lg border-gray-200 bg-gray-50 text-sm text-gray-500" @else class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900" @endif>
+                        <option value="">— Sin asignar —</option>
+                        @foreach($operadores as $operador)
+                            <option value="{{ $operador->id }}"
+                                @selected((string) old('usuario_asignado_id', $caja->usuario_asignado_id) === (string) $operador->id)>
+                                {{ $operador->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="text-xs text-gray-500">
+                        @if($caja->sesionesAbiertas->isNotEmpty())
+                            Bloqueado: la caja tiene una sesión abierta. Ciérrala antes de reasignarla.
+                        @else
+                            Solo usuarios con permiso para abrir caja. Requerido si la caja está activa.
+                        @endif
+                    </p>
+                    <x-input-error :messages="$errors->get('usuario_asignado_id')" class="mt-1" />
+                </div>
+
                 <div class="flex items-center gap-2">
                     <input type="hidden" name="activa" value="{{ $caja->sesionesAbiertas->isNotEmpty() ? '1' : '0' }}">
                     <input type="checkbox" id="activa" name="activa" value="1"

@@ -48,6 +48,11 @@ class CajaService
      * Apertura de sesión: una caja física no puede tener dos ABIERTAS
      * simultáneas y un operador tampoco. Refuerzo en BD (índices únicos
      * parciales) y protección server-side con lockForUpdate sobre la caja.
+     *
+     * B14.3.1 — Asignación de operador: el usuario autenticado SOLO puede
+     * abrir su caja asignada. Se revalida bajo lock la equivalencia
+     * usuario_asignado_id === user->id (obligatorio aunque el Controller ya
+     * haya filtrado).
      */
     public function abrirSesion(Caja $caja, User $user, int $fondoCentavos, ?string $observaciones = null): SesionCaja
     {
@@ -67,6 +72,10 @@ class CajaService
             // bloqueada es la fuente de verdad, no el objeto pasado por el caller.
             if (! $caja->activa) {
                 throw new DomainException("La caja {$caja->nombre} está inactiva y no puede abrirse.");
+            }
+
+            if ((int) $caja->usuario_asignado_id !== (int) $user->id) {
+                throw new DomainException('Esta caja no está asignada a tu usuario.');
             }
 
             if (SesionCaja::query()->where('caja_id', $caja->id)->abiertas()->exists()) {

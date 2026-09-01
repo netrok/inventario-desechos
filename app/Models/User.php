@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -66,5 +67,10 @@ class User extends Authenticatable
     public function movimientosCxc(): HasMany
     {
         return $this->hasMany(MovimientoCxC::class, 'user_id');
+    }
+
+    public function cajaAsignada(): HasOne
+    {
+        return $this->hasOne(Caja::class, 'usuario_asignado_id');
     }
 }

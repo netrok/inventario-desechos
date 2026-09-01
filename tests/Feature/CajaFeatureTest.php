@@ -75,12 +75,18 @@ function cajaRegistrador(): User
     return $user;
 }
 
-function cajaFisica(bool $activa = true): Caja
+function cajaFisica(bool $activa = true, ?User $asignado = null): Caja
 {
+    // B14.3.1 FIX 3: la caja ACTIVA exige operador (CHECK a nivel BD). Si el
+    // test pide una caja activa sin operador explícito, se asigna uno por
+    // defecto para que las escenas B14 heredadas sigan siendo válidas.
+    $asignado ??= ($activa ? cajaOperador() : null);
+
     return Caja::create([
         'nombre' => 'Caja Principal B14',
         'activa' => $activa,
         'descripcion' => 'Caja de prueba.',
+        'usuario_asignado_id' => $asignado?->id,
     ]);
 }
 
@@ -154,7 +160,7 @@ function cobrarCaja(Venta $venta, SesionCaja $sesion, User $user, array $pagos, 
  */
 it('abre una sesión ABIERTA con folio COR-XXXXXX y fondo exacto', function () {
     $user = cajaAdmin();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $user);
 
     $sesion = app(CajaService::class)->abrirSesion($caja, $user, Money::aCentavos('1500.25'));
 
@@ -167,7 +173,7 @@ it('abre una sesión ABIERTA con folio COR-XXXXXX y fondo exacto', function () {
 
 it('una caja física no admite dos sesiones ABIERTAS simultáneas', function () {
     $user = cajaAdmin();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $user);
     app(CajaService::class)->abrirSesion($caja, $user, 0);
 
     expect(fn () => app(CajaService::class)->abrirSesion($caja, $user, 0))
@@ -176,10 +182,37 @@ it('una caja física no admite dos sesiones ABIERTAS simultáneas', function () 
 
 it('un operador no puede tener dos sesiones ABIERTAS', function () {
     $user = cajaAdmin();
-    app(CajaService::class)->abrirSesion(cajaFisica(), $user, 0);
+    $otro = cajaRegistrador();
+    $caja = cajaFisica(true, $user);
+    app(CajaService::class)->abrirSesion($caja, $user, 0);
 
-    expect(fn () => app(CajaService::class)->abrirSesion(cajaFisica(), $user, 0))
-        ->toThrow(DomainException::class, 'Ya tienes una sesión de caja abierta');
+    // B14.3.1: un usuario está asignado a UNA sola caja, así que no puede
+    // abrir la caja ajena.
+    $cajaAjena = cajaFisica(true, $otro);
+    expect(fn () => app(CajaService::class)->abrirSesion($cajaAjena, $user, 0))
+        ->toThrow(DomainException::class, 'no está asignada a tu usuario');
+
+    // La caja propia tampoco admite una segunda sesión abierta.
+    expect(fn () => app(CajaService::class)->abrirSesion($caja, $user, 0))
+        ->toThrow(DomainException::class, 'ya tiene una sesión abierta');
+
+    expect(SesionCaja::abiertas()->count())->toBe(1);
+});
+
+it('el índice único parcial de BD impide dos sesiones ABIERTAS del mismo operador', function () {
+    $user = cajaAdmin();
+    $caja = cajaFisica(true, $user);
+    app(CajaService::class)->abrirSesion($caja, $user, 0);
+
+    // Bypass del servicio para ejercitar la barrera de BD (defensa en
+    // profundidad): un segundo ABIERTA para el mismo operador debe violar el
+    // índice único parcial sesiones_caja_operador_abierta_unique.
+    expect(fn () => SesionCaja::create([
+        'caja_id' => cajaFisica(true, User::factory()->create())->id,
+        'user_id_apertura' => $user->id,
+        'fondo_inicial' => 0,
+        'estado' => SesionCaja::ESTADO_ABIERTA,
+    ]))->toThrow(\Illuminate\Database\QueryException::class);
 });
 
 it('rechaza abrir una caja inactiva', function () {
@@ -189,11 +222,20 @@ it('rechaza abrir una caja inactiva', function () {
         ->toThrow(DomainException::class, 'inactiva');
 });
 
+it('rechaza abrir una caja no asignada a tu usuario', function () {
+    $user = cajaAdmin();
+    $otro = cajaAdmin();
+    $caja = cajaFisica(true, $otro);
+
+    expect(fn () => app(CajaService::class)->abrirSesion($caja, $user, 0))
+        ->toThrow(DomainException::class, 'no está asignada a tu usuario');
+});
+
 it('B14.3 revalida bajo lock una caja desactivada tras un escenario STALE', function () {
     $user = cajaAdmin();
 
     // Instancia local con activa=true (el escenario previo a la desactivación).
-    $caja = cajaFisica(true);
+    $caja = cajaFisica(true, $user);
     expect($caja->activa)->toBeTrue();
 
     // Otra transacción desactiva la misma caja sin refrescar la instancia local.
@@ -220,11 +262,10 @@ it('el formulario y POST de apertura exigen el permiso cajas.abrir', function ()
 
 it('abre por HTTP, genera folio COR y redirige a los movimientos', function () {
     $user = cajaAdmin();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $user);
 
     $this->actingAs($user)
         ->post(route('cajas.abrir.store'), [
-            'caja_id' => $caja->id,
             'fondo_inicial' => '500.00',
             'observaciones_apertura' => 'Apertura de prueba.',
         ])
@@ -240,11 +281,10 @@ it('abre por HTTP, genera folio COR y redirige a los movimientos', function () {
 
 it('valida un fondo inicial negativo en la apertura', function () {
     $user = cajaAdmin();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $user);
 
     $this->actingAs($user)
         ->post(route('cajas.abrir.store'), [
-            'caja_id' => $caja->id,
             'fondo_inicial' => '-10.00',
         ])
         ->assertSessionHasErrors('fondo_inicial');
@@ -452,7 +492,7 @@ it('rechaza un retiro que supera el efectivo esperado', function () {
  */
 it('cierra la sesión con arqueo ciego, diferencia cero y queda inmutable', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
 
     $venta = ventaCaja($user, 50.0);
     cobrarCaja($venta, $open, $user, [[
@@ -489,7 +529,7 @@ it('cierra la sesión con arqueo ciego, diferencia cero y queda inmutable', func
 
 it('una diferencia de caja exige la observación obligatoria', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
 
     $venta = ventaCaja($user, 50.0);
     cobrarCaja($venta, $open, $user, [[
@@ -511,7 +551,7 @@ it('una diferencia de caja exige la observación obligatoria', function () {
 
 it('el formulario de cierre oculta el efectivo esperado (arqueo ciego)', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
 
     $venta = ventaCaja($user, 50.0);
     cobrarCaja($venta, $open, $user, [[
@@ -567,7 +607,7 @@ it('rechaza en HTTP un retiro mayor al efectivo esperado', function () {
 
 it('no se puede operar una sesión que ya fue cerrada', function () {
     $user = cajaRegistrador();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 1000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 1000);
     app(CajaService::class)->cerrarSesion($open, $user, ['10' => 1], 1000, null);
 
     $this->actingAs($user)
@@ -639,7 +679,7 @@ it('un reembolso EFECTIVO con sesión deja REEMBOLSO_EFECTIVO en el cajón', fun
 
 it('el cierre HTTP persiste estado, esperado y diferencia con observación', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
 
     $venta = ventaCaja($user, 50.0);
     cobrarCaja($venta, $open, $user, [[
@@ -677,7 +717,7 @@ it('el dashboard muestra la sesión de caja abierta del operador', function () {
 
 it('el cierre HTTP sin observación ante diferencia devuelve error', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
 
     $venta = ventaCaja($user, 50.0);
     cobrarCaja($venta, $open, $user, [[
@@ -734,7 +774,7 @@ it('rechaza un AJUSTE de SALIDA que deja el efectivo esperado negativo', functio
 
 it('rechaza un ajuste sobre una sesión cerrada', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 1000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 1000);
     app(CajaService::class)->cerrarSesion($open, $user, ['10' => 1], 1000, null);
 
     expect(fn () => app(CajaService::class)->registrarAjuste($open->fresh(), $user, 100, MovimientoCaja::DIR_ENTRADA, 'Después del cierre'))
@@ -820,12 +860,14 @@ it('el seeder no duplica la Caja Principal (idempotente por código)', function 
     $principales = $cajas->filter(fn ($c) => $c->codigo === 'CAJ-000001');
     expect($principales->count())->toBe(1);
     expect($principales->first()->nombre)->toBe('Caja Principal');
-    expect($principales->first()->activa)->toBeTrue();
+    // B14.3.1 FIX 3: seed inicial de la caja principal es INACTIVA (no hay
+    // operador aún que asignar a una caja activa).
+    expect($principales->first()->activa)->toBeFalse();
 });
 
 it('produce el corte como PDF y contiene el folio de la sesión', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
     $cerrada = app(CajaService::class)->cerrarSesion($open, $user, ['100' => 1], 10000, null);
 
     $response = $this->actingAs($user)->get(route('cajas.corte.pdf', $cerrada));
@@ -838,7 +880,7 @@ it('produce el corte como PDF y contiene el folio de la sesión', function () {
 
 it('produce el corte como XLSX y contiene el folio de la sesión', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
     $cerrada = app(CajaService::class)->cerrarSesion($open, $user, ['100' => 1], 10000, null);
 
     $response = $this->actingAs($user)->get(route('cajas.corte.xlsx', $cerrada));
@@ -1141,7 +1183,7 @@ it('B14.3 una sesión ABIERTA no calcula ni entrega agregados entradas/salidas a
 
 it('B14.3 una sesión CERRADA sí calcula los agregados entradas/salidas', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
 
     $venta = ventaCaja($user, 50.0);
     cobrarCaja($venta, $open, $user, [[
@@ -1167,7 +1209,7 @@ it('B14.3 una sesión CERRADA sí calcula los agregados entradas/salidas', funct
 
 it('B14.3 una sesión CERRADA sí muestra esperado, contado y diferencia', function () {
     $user = cajaAdmin();
-    $open = app(CajaService::class)->abrirSesion(cajaFisica(), $user, 10000);
+    $open = app(CajaService::class)->abrirSesion(cajaFisica(true, $user), $user, 10000);
 
     $venta = ventaCaja($user, 50.0);
     cobrarCaja($venta, $open, $user, [[
@@ -1257,15 +1299,27 @@ it('B14.3 un usuario sin cajas.configurar recibe 403 en la gestión de cajas', f
 
 it('B14.3 crear cajas produce códigos distintos, secuenciales y nunca manuales', function () {
     $admin = cajaAdmin();
+    $op1 = cajaOperador();
+    $op2 = cajaOperador();
 
     $this->actingAs($admin)
-        ->post(route('cajas.gestion.store'), ['nombre' => 'Caja Norte', 'descripcion' => 'Primera sucursal'])
+        ->post(route('cajas.gestion.store'), [
+            'nombre' => 'Caja Norte',
+            'descripcion' => 'Primera sucursal',
+            'usuario_asignado_id' => $op1->id,
+            'activa' => '1',
+        ])
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('cajas.gestion'));
 
     // Intento de forzar el código: el servidor debe ignorarlo (secuencia).
     $this->actingAs($admin)
-        ->post(route('cajas.gestion.store'), ['nombre' => 'Caja Hack', 'codigo' => 'CAJ-999999'])
+        ->post(route('cajas.gestion.store'), [
+            'nombre' => 'Caja Hack',
+            'codigo' => 'CAJ-999999',
+            'usuario_asignado_id' => $op2->id,
+            'activa' => '1',
+        ])
         ->assertSessionHasNoErrors();
 
     $codigos = Caja::query()->orderBy('id')->pluck('codigo')->values();
@@ -1281,7 +1335,8 @@ it('B14.3 crear cajas produce códigos distintos, secuenciales y nunca manuales'
 
 it('B14.3 editar una caja no cambia su código y persiste nombre y descripción', function () {
     $admin = cajaAdmin();
-    $caja = cajaFisica();
+    $op = cajaOperador();
+    $caja = cajaFisica(true, $op);
     $codigo = $caja->codigo;
 
     $this->actingAs($admin)
@@ -1289,6 +1344,7 @@ it('B14.3 editar una caja no cambia su código y persiste nombre y descripción'
             'nombre' => 'Caja Renombrada',
             'descripcion' => 'Nueva descripción de la caja.',
             'activa' => '1',
+            'usuario_asignado_id' => $op->id,
         ])
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('cajas.gestion'));
@@ -1302,16 +1358,25 @@ it('B14.3 editar una caja no cambia su código y persiste nombre y descripción'
 
 it('B14.3 se puede desactivar y volver a activar una caja sin sesión abierta', function () {
     $admin = cajaAdmin();
-    $caja = cajaFisica();
+    $op = cajaOperador();
+    $caja = cajaFisica(true, $op);
 
     $this->actingAs($admin)
-        ->put(route('cajas.gestion.update', $caja), ['nombre' => $caja->nombre, 'activa' => '0'])
+        ->put(route('cajas.gestion.update', $caja), [
+            'nombre' => $caja->nombre,
+            'activa' => '0',
+            'usuario_asignado_id' => $op->id,
+        ])
         ->assertSessionHasNoErrors();
 
     expect($caja->fresh()->activa)->toBeFalse();
 
     $this->actingAs($admin)
-        ->put(route('cajas.gestion.update', $caja), ['nombre' => $caja->nombre, 'activa' => '1'])
+        ->put(route('cajas.gestion.update', $caja), [
+            'nombre' => $caja->nombre,
+            'activa' => '1',
+            'usuario_asignado_id' => $op->id,
+        ])
         ->assertSessionHasNoErrors();
 
     expect($caja->fresh()->activa)->toBeTrue();
@@ -1319,11 +1384,15 @@ it('B14.3 se puede desactivar y volver a activar una caja sin sesión abierta', 
 
 it('B14.3 no se puede desactivar una caja con sesión abierta', function () {
     $admin = cajaAdmin();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $admin);
     $sesion = app(CajaService::class)->abrirSesion($caja, $admin, 0);
 
     $this->actingAs($admin)
-        ->put(route('cajas.gestion.update', $caja), ['nombre' => $caja->nombre, 'activa' => '0'])
+        ->put(route('cajas.gestion.update', $caja), [
+            'nombre' => $caja->nombre,
+            'activa' => '0',
+            'usuario_asignado_id' => $admin->id,
+        ])
         ->assertSessionHasErrors('activa');
 
     expect($caja->fresh()->activa)->toBeTrue();
@@ -1332,8 +1401,9 @@ it('B14.3 no se puede desactivar una caja con sesión abierta', function () {
 
 it('B14.3 una caja inactiva no está disponible al abrir sesión', function () {
     $admin = cajaAdmin();
-    $activa = Caja::create(['nombre' => 'Caja Activa Norte', 'activa' => true]);
-    $inactiva = Caja::create(['nombre' => 'Caja Inactiva Sur', 'activa' => false]);
+    $otro = cajaRegistrador();
+    $activa = Caja::create(['nombre' => 'Caja Activa Norte', 'activa' => true, 'usuario_asignado_id' => $admin->id]);
+    $inactiva = Caja::create(['nombre' => 'Caja Inactiva Sur', 'activa' => false, 'usuario_asignado_id' => $otro->id]);
 
     $this->actingAs($admin)
         ->get(route('cajas.abrir'))
@@ -1341,19 +1411,15 @@ it('B14.3 una caja inactiva no está disponible al abrir sesión', function () {
         ->assertSee($activa->nombre)
         ->assertDontSee($inactiva->nombre);
 
-    expect(fn () => app(CajaService::class)->abrirSesion($inactiva, $admin, 0))
+    expect(fn () => app(CajaService::class)->abrirSesion($inactiva->fresh(), $otro, 0))
         ->toThrow(DomainException::class, 'inactiva');
-
-    $this->actingAs($admin)
-        ->post(route('cajas.abrir.store'), ['caja_id' => $inactiva->id, 'fondo_inicial' => '0.00'])
-        ->assertSessionHasErrors('fondo_inicial');
 });
 
 it('B14.3 dos operadores distintos abren dos cajas distintas simultáneamente', function () {
     $a = cajaRegistrador();
     $b = cajaRegistrador();
-    $cajaA = cajaFisica();
-    $cajaB = cajaFisica();
+    $cajaA = cajaFisica(true, $a);
+    $cajaB = cajaFisica(true, $b);
 
     $sesionA = app(CajaService::class)->abrirSesion($cajaA, $a, 1000);
     $sesionB = app(CajaService::class)->abrirSesion($cajaB, $b, 2000);
@@ -1365,34 +1431,43 @@ it('B14.3 dos operadores distintos abren dos cajas distintas simultáneamente', 
     expect(SesionCaja::abiertas()->count())->toBe(2);
 });
 
-it('B14.3 dos operadores no pueden abrir la misma caja simultáneamente', function () {
+it('B14.3 un operador no asignado no puede abrir una caja', function () {
     $a = cajaRegistrador();
     $b = cajaRegistrador();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $a);
 
     app(CajaService::class)->abrirSesion($caja, $a, 0);
 
+    // $b no está asignado a la caja: el servicio lo rechaza.
     expect(fn () => app(CajaService::class)->abrirSesion($caja, $b, 0))
-        ->toThrow(DomainException::class, 'ya tiene una sesión abierta');
+        ->toThrow(DomainException::class, 'no está asignada a tu usuario');
 });
 
-it('B14.3 un operador no puede abrir dos cajas distintas simultáneamente', function () {
+it('B14.3 un operador con su caja abierta no puede abrir otra', function () {
     $user = cajaRegistrador();
+    $otro = cajaRegistrador();
+    $cajaPropia = cajaFisica(true, $user);
+    $cajaAjena = cajaFisica(true, $otro);
 
-    app(CajaService::class)->abrirSesion(cajaFisica(), $user, 0);
+    app(CajaService::class)->abrirSesion($cajaPropia, $user, 0);
 
-    expect(fn () => app(CajaService::class)->abrirSesion(cajaFisica(), $user, 0))
-        ->toThrow(DomainException::class, 'Ya tienes una sesión de caja abierta');
+    // No puede abrir una caja ajena (además ya tiene una sesión abierta).
+    expect(fn () => app(CajaService::class)->abrirSesion($cajaAjena, $user, 0))
+        ->toThrow(DomainException::class);
 });
 
 it('B14.3 el historial de una caja desactivada permanece', function () {
     $user = cajaAdmin();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $user);
     $sesion = app(CajaService::class)->abrirSesion($caja, $user, 1000);
     app(CajaService::class)->cerrarSesion($sesion, $user, ['10' => 1], 1000, null);
 
     $this->actingAs($user)
-        ->put(route('cajas.gestion.update', $caja), ['nombre' => $caja->nombre, 'activa' => '0'])
+        ->put(route('cajas.gestion.update', $caja), [
+            'nombre' => $caja->nombre,
+            'activa' => '0',
+            'usuario_asignado_id' => $user->id,
+        ])
         ->assertSessionHasNoErrors();
 
     expect($caja->fresh()->activa)->toBeFalse();
@@ -1406,7 +1481,7 @@ it('B14.3 el historial de una caja desactivada permanece', function () {
 
 it('B14.3 no existe borrado destructivo de cajas ni de su historial', function () {
     $user = cajaAdmin();
-    $caja = cajaFisica();
+    $caja = cajaFisica(true, $user);
     $sesion = app(CajaService::class)->abrirSesion($caja, $user, 1000);
     app(CajaService::class)->cerrarSesion($sesion, $user, ['10' => 1], 1000, null);
 

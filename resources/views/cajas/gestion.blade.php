@@ -44,10 +44,10 @@
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                             <th class="px-5 py-3">Código</th>
                             <th class="px-5 py-3">Nombre</th>
+                            <th class="px-5 py-3">Operador asignado</th>
                             <th class="px-5 py-3">Estado</th>
-                            <th class="px-5 py-3">Descripción</th>
                             <th class="px-5 py-3">Sesión abierta</th>
-                            <th class="px-5 py-3">Operador actual</th>
+                            <th class="px-5 py-3">Sesión abierta por</th>
                             <th class="px-5 py-3 text-right"></th>
                         </tr>
                     </thead>
@@ -56,13 +56,22 @@
                             <tr class="hover:bg-gray-50">
                                 <td class="px-5 py-3 font-mono text-xs font-semibold text-gray-900">{{ $caja->codigo }}</td>
                                 <td class="px-5 py-3 font-semibold text-gray-900">{{ $caja->nombre }}</td>
+                                <td class="px-5 py-3 text-gray-700">
+                                    @if($caja->usuario_asignado_id)
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                            {{ $caja->usuarioAsignado?->name ?? 'Operador #'.$caja->usuario_asignado_id }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400">Sin asignar</span>
+                                    @endif
+                                </td>
                                 <td class="px-5 py-3">
                                     <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold
                                         {{ $caja->activa ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600' }}">
                                         {{ $caja->activa ? 'ACTIVA' : 'INACTIVA' }}
                                     </span>
                                 </td>
-                                <td class="px-5 py-3 text-gray-600">{{ $caja->descripcion ?? '—' }}</td>
                                 @php $abierta = $caja->sesionesAbiertas->first(); @endphp
                                 <td class="px-5 py-3 text-gray-700">{{ $abierta?->folio ?? '—' }}</td>
                                 <td class="px-5 py-3 text-gray-700">{{ $abierta?->usuarioApertura?->name ?? '—' }}</td>

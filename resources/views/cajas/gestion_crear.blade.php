@@ -36,6 +36,21 @@
                     <x-input-error :messages="$errors->get('descripcion')" class="mt-1" />
                 </div>
 
+                <div class="space-y-1">
+                    <label for="usuario_asignado_id" class="block text-sm font-semibold text-gray-900">Usuario operador</label>
+                    <select id="usuario_asignado_id" name="usuario_asignado_id"
+                            class="w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900">
+                        <option value="">— Sin asignar —</option>
+                        @foreach($operadores as $operador)
+                            <option value="{{ $operador->id }}" @selected(old('usuario_asignado_id') == $operador->id)>
+                                {{ $operador->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="text-xs text-gray-500">Solo usuarios con permiso para abrir caja. Requerido si la caja está activa.</p>
+                    <x-input-error :messages="$errors->get('usuario_asignado_id')" class="mt-1" />
+                </div>
+
                 <div class="flex items-center gap-2">
                     <input type="hidden" name="activa" value="0">
                     <input type="checkbox" id="activa" name="activa" value="1" checked

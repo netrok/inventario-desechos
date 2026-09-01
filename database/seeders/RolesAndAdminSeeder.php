@@ -221,7 +221,11 @@ class RolesAndAdminSeeder extends Seeder
             Caja::create([
                 'codigo' => 'CAJ-000001',
                 'nombre' => 'Caja Principal',
-                'activa' => true,
+                // B14.3.1 FIX 3: la caja ACTIVA exige operador (CHECK). En un
+                // seed inicial aún no existe un usuario con cajas.abrir que
+                // asignar, por lo que se crea INACTIVA para no violar la
+                // restricción. El Admin la activa y asigna desde el maestro.
+                'activa' => false,
                 'descripcion' => 'Caja principal del establecimiento.',
             ]);
         }

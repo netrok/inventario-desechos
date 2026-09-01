@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 
@@ -13,10 +14,12 @@ class Caja extends Model
         'nombre',
         'activa',
         'descripcion',
+        'usuario_asignado_id',
     ];
 
     protected $casts = [
         'activa' => 'boolean',
+        'usuario_asignado_id' => 'integer',
     ];
 
     protected static function booted(): void
@@ -31,6 +34,11 @@ class Caja extends Model
 
             $caja->codigo = 'CAJ-'.str_pad((string) $next, 6, '0', STR_PAD_LEFT);
         });
+    }
+
+    public function usuarioAsignado(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'usuario_asignado_id');
     }
 
     public function sesiones(): HasMany

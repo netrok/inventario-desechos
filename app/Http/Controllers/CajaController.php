@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Caja;
 use App\Models\MovimientoCaja;
 use App\Models\SesionCaja;
+use App\Models\User;
 use App\Services\CajaService;
 use App\Support\Money;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -50,7 +51,7 @@ class CajaController extends Controller
     public function gestion()
     {
         $cajas = Caja::query()
-            ->with(['sesionesAbiertas.usuarioApertura'])
+            ->with(['sesionesAbiertas.usuarioApertura', 'usuarioAsignado'])
             ->orderBy('codigo')
             ->get();
 
@@ -59,18 +60,34 @@ class CajaController extends Controller
 
     public function crearForm()
     {
-        return view('cajas.gestion_crear', ['caja' => new Caja]);
+        return view('cajas.gestion_crear', [
+            'caja' => new Caja,
+            'operadores' => $this->operadoresPosibles(),
+        ]);
     }
 
     public function store(Request $request)
     {
         $data = $this->validarCaja($request);
 
-        $caja = Caja::create([
-            'nombre' => trim($data['nombre']),
-            'descripcion' => $this->normalizarDescripcion($data),
-            'activa' => ($data['activa'] ?? '1') ? true : false,
-        ]);
+        $caja = DB::transaction(function () use ($data) {
+            $asignadoId = $data['usuario_asignado_id'] ?? null;
+
+            // B14.3.1 FIX 2 — STORE: aún no hay una Caja persistida, por lo que
+            // se bloquea el User seleccionado ANTES del INSERT y se revalida de
+            // forma autoritativa dentro de la transacción (existe, permiso y
+            // no asignado a otra caja). La UNIQUE es la barrera declarativa final.
+            if ($asignadoId !== null) {
+                $this->validarOperadorAsignado($asignadoId);
+            }
+
+            return Caja::create([
+                'nombre' => trim($data['nombre']),
+                'descripcion' => $this->normalizarDescripcion($data),
+                'activa' => $data['activa'],
+                'usuario_asignado_id' => $asignadoId,
+            ]);
+        });
 
         return redirect()->route('cajas.gestion')
             ->with('success', "Caja {$caja->codigo} ({$caja->nombre}) creada.");
@@ -80,7 +97,10 @@ class CajaController extends Controller
     {
         $caja->load('sesionesAbiertas');
 
-        return view('cajas.gestion_editar', ['caja' => $caja]);
+        return view('cajas.gestion_editar', [
+            'caja' => $caja,
+            'operadores' => $this->operadoresPosibles(),
+        ]);
     }
 
     public function update(Request $request, Caja $caja)
@@ -88,9 +108,13 @@ class CajaController extends Controller
         $data = $this->validarCaja($request);
 
         DB::transaction(function () use ($caja, $data) {
+            // B14.3.1 FIX 2 — UPDATE: lock de la Caja PRIMERO (serializa con la
+            // apertura y la reasignación). Si hay nuevo operador, después se
+            // bloquea el User seleccionado y se revalida la asignación.
             $caja = Caja::query()->lockForUpdate()->findOrFail($caja->id);
 
-            $activa = ($data['activa'] ?? '0') ? true : false;
+            $activa = $data['activa'];
+            $nuevoAsignado = $data['usuario_asignado_id'] ?? null;
 
             // Regla de desactivación: una caja con sesión ABIERTA no se
             // desactiva. Lock sobre la fila para serializar con la apertura
@@ -101,10 +125,29 @@ class CajaController extends Controller
                 ]);
             }
 
+            // B14.3.1 — Reasignación de operador: si existe sesión ABIERTA y el
+            // usuario asignado cambia, se rechaza. Se compara bajo lock con la
+            // fila bloqueada (serializa con la apertura).
+            $cambioAsignado = ($caja->usuario_asignado_id ?? null) != $nuevoAsignado;
+
+            if ($caja->sesionesAbiertas()->exists() && $cambioAsignado) {
+                throw ValidationException::withMessages([
+                    'usuario_asignado_id' => 'No puedes cambiar el operador de una caja con una sesión abierta. Ciérrala antes de reasignarla.',
+                ]);
+            }
+
+            // B14.3.1 FIX 2 — Revalidación autoritativa del nuevo operador DENTRO
+            // de la transacción (excluye la Caja actual): existe, permiso y no
+            // asignado a otra caja. La UNIQUE es la barrera declarativa final.
+            if ($nuevoAsignado !== null) {
+                $this->validarOperadorAsignado($nuevoAsignado, $caja->id);
+            }
+
             $caja->update([
                 'nombre' => trim($data['nombre']),
                 'descripcion' => $this->normalizarDescripcion($data),
                 'activa' => $activa,
+                'usuario_asignado_id' => $nuevoAsignado,
             ]);
         });
 
@@ -116,14 +159,81 @@ class CajaController extends Controller
      * Validación compartida del maestro de cajas. El código se genera por
      * secuencia (nunca se acepta del formulario): el campo `codigo` queda
      * fuera de la validación y no llega al modelo.
+     *
+     * B14.3.1 — Asignación de operador. Aquí SOLO valida el request y la regla
+     * de "caja ACTIVA exige operador" (mensaje temprano). La validación
+     * AUTORITATIVA del operador (existe, permiso, no asignado a otra caja)
+     * ocurre DENTRO de la transacción con lockForUpdate (ver store/update).
      */
     private function validarCaja(Request $request): array
     {
-        return $request->validate([
+        $datos = $request->validate([
             'nombre' => ['required', 'string', 'max:100'],
             'descripcion' => ['nullable', 'string', 'max:1500'],
             'activa' => ['sometimes', 'boolean'],
+            'usuario_asignado_id' => ['nullable', 'integer'],
         ]);
+
+        $datos['activa'] = isset($datos['activa']) ? (bool) $datos['activa'] : true;
+
+        if ($datos['activa'] && ($datos['usuario_asignado_id'] ?? null) === null) {
+            throw ValidationException::withMessages([
+                'usuario_asignado_id' => 'Una caja activa debe tener un usuario operador asignado.',
+            ]);
+        }
+
+        return $datos;
+    }
+
+    /**
+     * B14.3.1 FIX 2 — Validación AUTORITATIVA del operador, ejecutada SIEMPRE
+     * dentro de la transacción con lockForUpdate sobre el User seleccionado.
+     * Revalida que exista, tenga permiso cajas.abrir y no esté asignado a otra
+     * caja (opcionalmente excluyendo la caja que se está editando).
+     *
+     * Orden de locks de configuración: Caja -> User (en UPDATE, la Caja se
+     * bloquea primero). En STORE aún no hay Caja persistida, por lo que se
+     * bloquea el User antes del INSERT. La UNIQUE(usuario_asignado_id) sigue
+     * siendo la barrera declarativa final contra la carrera entre admins.
+     */
+    private function validarOperadorAsignado(int $asignadoId, ?int $excluirCajaId = null): void
+    {
+        $asignado = User::query()->lockForUpdate()->find($asignadoId);
+
+        if ($asignado === null) {
+            throw ValidationException::withMessages([
+                'usuario_asignado_id' => 'El usuario operador seleccionado no existe.',
+            ]);
+        }
+
+        if (! $asignado->can('cajas.abrir')) {
+            throw ValidationException::withMessages([
+                'usuario_asignado_id' => 'El usuario seleccionado no tiene permiso para abrir u operar una caja.',
+            ]);
+        }
+
+        $conflicto = Caja::query()
+            ->where('usuario_asignado_id', $asignadoId)
+            ->when($excluirCajaId !== null, fn ($q) => $q->where('id', '!=', $excluirCajaId))
+            ->exists();
+
+        if ($conflicto) {
+            throw ValidationException::withMessages([
+                'usuario_asignado_id' => 'Ese usuario ya está asignado a otra caja. Un operador no puede estar en dos cajas a la vez.',
+            ]);
+        }
+    }
+
+    /**
+     * Operadores que pueden ser asignados a una caja: usuarios existentes con
+     * permiso para abrir/u operar caja (cajas.abrir).
+     */
+    private function operadoresPosibles()
+    {
+        return User::query()
+            ->permission('cajas.abrir')
+            ->orderBy('name')
+            ->get();
     }
 
     private function normalizarDescripcion(array $data): ?string
@@ -135,6 +245,10 @@ class CajaController extends Controller
 
     /**
      * Formulario de apertura (cajas.abrir).
+     *
+     * B14.3.1: NO hay selector libre de caja. El usuario autenticado SOLO puede
+     * abrir su caja activa asignada; se muestra como información de solo
+     * lectura. Sin caja asignada → estado controlado.
      */
     public function abrir()
     {
@@ -143,20 +257,34 @@ class CajaController extends Controller
                 ->with('info', 'Ya tienes una sesión de caja abierta. Ciérrala antes de abrir otra.');
         }
 
-        $cajas = Caja::query()->activas()->get();
+        $caja = Caja::query()
+            ->where('usuario_asignado_id', Auth::id())
+            ->where('activa', true)
+            ->with('usuarioAsignado')
+            ->first();
 
-        return view('cajas.abrir', ['cajas' => $cajas]);
+        return view('cajas.abrir', ['caja' => $caja]);
     }
 
     public function abrirSesion(Request $request)
     {
         $data = $request->validate([
-            'caja_id' => ['required', 'integer', 'exists:cajas,id'],
             'fondo_inicial' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
             'observaciones_apertura' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $caja = Caja::findOrFail($data['caja_id']);
+        // B14.3.1: la caja se resuelve server-side por asignación + activa.
+        // El caja_id enviado por el navegador JAMÁS se usa como autoridad.
+        $caja = Caja::query()
+            ->where('usuario_asignado_id', Auth::id())
+            ->where('activa', true)
+            ->first();
+
+        if ($caja === null) {
+            throw ValidationException::withMessages([
+                'fondo_inicial' => 'No tienes una caja activa asignada. Solicita al administrador que te asigne una.',
+            ]);
+        }
 
         try {
             $sesion = $this->service->abrirSesion(

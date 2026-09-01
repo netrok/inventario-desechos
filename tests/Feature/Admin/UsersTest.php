@@ -206,3 +206,47 @@ it('permite cambios normales a un Admin conservando su rol', function () {
     expect($admin->name)->toBe('Admin Nombre Nuevo');
     expect($admin->hasRole('Admin'))->toBeTrue();
 });
+
+it('impide a un Admin eliminar un usuario asignado a una caja (B14.3.1)', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin'); // único Admin
+
+    $operador = User::factory()->create();
+    $operador->assignRole('Operador');
+
+    \App\Models\Caja::create([
+        'nombre' => 'Caja del operador',
+        'activa' => true,
+        'usuario_asignado_id' => $operador->id,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->delete(route('admin.users.destroy', $operador));
+
+    // Sin 500: feedback controlado a la UI.
+    $response->assertSessionHas(
+        'error',
+        'No se puede eliminar este usuario porque está asignado a una caja. Reasigna o libera la caja primero.'
+    );
+
+    // El usuario y su caja permanecen.
+    $this->assertDatabaseHas('users', ['id' => $operador->id]);
+    $this->assertDatabaseHas('cajas', ['id' => $operador->cajaAsignada->id, 'usuario_asignado_id' => $operador->id]);
+});
+
+it('un usuario sin caja asignada conserva el comportamiento de eliminación', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('Admin');
+
+    $otroAdmin = User::factory()->create();
+    $otroAdmin->assignRole('Admin');
+
+    $operador = User::factory()->create();
+    $operador->assignRole('Operador');
+
+    $this->actingAs($admin)
+        ->delete(route('admin.users.destroy', $operador))
+        ->assertRedirect('/admin/users');
+
+    $this->assertDatabaseMissing('users', ['id' => $operador->id]);
+});

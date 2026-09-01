@@ -135,6 +135,16 @@ class UserController extends Controller
             return back()->with('error', 'No se puede eliminar este usuario porque tiene movimientos CxC registrados.');
         }
 
+        // No borrar un usuario asignado a una caja (B14.3.1): perdería el
+        // operador actual de la caja. El FK RESTRICT lo respalda además, pero
+        // la UI no debe terminar en QueryException/500.
+        if ($user->cajaAsignada()->exists()) {
+            return back()->with(
+                'error',
+                'No se puede eliminar este usuario porque está asignado a una caja. Reasigna o libera la caja primero.'
+            );
+        }
+
         $user->delete();
 
         return redirect()

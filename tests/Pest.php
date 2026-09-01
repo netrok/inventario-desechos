@@ -64,6 +64,9 @@ function openCajaFor(\App\Models\User $user, float $fondo = 0.0): \App\Models\Se
         'nombre' => 'Caja de pruebas '.$user->id.(string) uniqid('', false),
         'activa' => true,
         'descripcion' => 'Caja de pruebas.',
+        // B14.3.1 FIX 3: la caja ACTIVA exige operador (CHECK). Se asigna el
+        // propio usuario que la abre.
+        'usuario_asignado_id' => $user->id,
     ]);
 
     return \App\Models\SesionCaja::create([
