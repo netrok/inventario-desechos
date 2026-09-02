@@ -58,6 +58,11 @@ class PostventaController extends Controller
             'composicion',
             'saldo económico',
             'saldo economico',
+            'deuda',
+            'económica',
+            'economica',
+            'abono',
+            'cambió',
         ] as $indicador) {
             if (str_contains($mensaje, $indicador)) {
                 return true;
@@ -133,6 +138,69 @@ class PostventaController extends Controller
             ->all();
     }
 
+    /**
+     * ABONOS CxC reembolsables (LIFO por inserción) para previsualizar el
+     * componente deudor en la UI. El navegador solo PREVISUALIZA; el servicio
+     * recalcula todo server-side bajo locks.
+     *
+     * @return array<int, array{
+     *     id:int,
+     *     metodo:string,
+     *     monto_centavos:int,
+     *     ya_reembolsado_centavos:int,
+     *     disponible_centavos:int
+     * }>
+     */
+    private function abonosReembolsoUi(Venta $venta): array
+    {
+        $cuenta = $venta->cuentaPorCobrar;
+
+        if (! $cuenta instanceof \App\Models\CuentaPorCobrar) {
+            return [];
+        }
+
+        $abonos = \App\Models\MovimientoCxC::query()
+            ->where('cuenta_por_cobrar_id', $cuenta->id)
+            ->where('tipo', \App\Models\MovimientoCxC::TIPO_ABONO)
+            ->with('reembolsosPostventa')
+            ->orderByDesc('id')
+            ->get();
+
+        if ($abonos->isEmpty()) {
+            return [];
+        }
+
+        $reversados = \App\Models\MovimientoCxC::query()
+            ->where('tipo', \App\Models\MovimientoCxC::TIPO_REVERSA_ABONO)
+            ->whereIn('movimiento_origen_id', $abonos->pluck('id'))
+            ->pluck('movimiento_origen_id')
+            ->all();
+
+        $resultado = [];
+
+        foreach ($abonos as $abono) {
+            if (in_array((int) $abono->id, $reversados, true)) {
+                continue;
+            }
+
+            $yaReembolsado = 0;
+
+            foreach ($abono->reembolsosPostventa as $reembolso) {
+                $yaReembolsado += \App\Support\Money::aCentavos($reembolso->monto);
+            }
+
+            $resultado[] = [
+                'id' => (int) $abono->id,
+                'metodo' => $abono->metodo,
+                'monto_centavos' => (int) $abono->monto_centavos,
+                'ya_reembolsado_centavos' => $yaReembolsado,
+                'disponible_centavos' => (int) $abono->monto_centavos - $yaReembolsado,
+            ];
+        }
+
+        return $resultado;
+    }
+
     public function cancelarForm(Venta $venta)
     {
         abort_unless(
@@ -146,6 +214,7 @@ class PostventaController extends Controller
             'detalles.item',
             'detalles.item.categoria',
             'pagos',
+            'cuentaPorCobrar',
         ]);
 
         return view('postventa.cancelar', [
@@ -157,18 +226,23 @@ class PostventaController extends Controller
             'sugerido' => $this->formaReembolsoSugerida($venta),
             'reembolsoAutomatico' => $this->esReembolsoAutomatico($venta),
             'pagosReembolsoUi' => $this->pagosReembolsoUi($venta),
+            'creditoPostventa' => $venta->cuentaPorCobrar !== null,
+            'abonosReembolsoUi' => $this->abonosReembolsoUi($venta),
         ]);
     }
 
     public function cancelar(Request $request, Venta $venta)
     {
-        $venta->loadMissing('pagos');
-        $automatico = $this->esReembolsoAutomatico($venta);
+        $venta->loadMissing(['pagos', 'cuentaPorCobrar']);
+        $esCredito = $venta->cuentaPorCobrar !== null;
+        $automatico = $esCredito || $this->esReembolsoAutomatico($venta);
 
         $rules = [
             'motivo' => ['required', 'string', 'min:5', 'max:2000'],
             'referencias_reembolso' => ['nullable', 'array'],
             'referencias_reembolso.*' => ['nullable', 'string', 'max:100'],
+            'referencias_reembolso_cxc' => ['nullable', 'array'],
+            'referencias_reembolso_cxc.*' => ['nullable', 'string', 'max:100'],
             'referencia_reembolso' => ['nullable', 'string', 'max:100'],
         ];
 
@@ -191,7 +265,8 @@ class PostventaController extends Controller
                     ? null
                     : ($data['forma_reembolso'] ?? null),
                 $data['referencias_reembolso'] ?? [],
-                $data['referencia_reembolso'] ?? null
+                $data['referencia_reembolso'] ?? null,
+                $data['referencias_reembolso_cxc'] ?? []
             );
         } catch (DomainException $e) {
             $campo = $this->esErrorFinancieroPostventa($e)
@@ -225,6 +300,7 @@ class PostventaController extends Controller
             'detalles.item',
             'detalles.item.categoria',
             'detalles.documentoPostventaDetalle.documento',
+            'cuentaPorCobrar',
         ]);
 
         return view('postventa.devolver', [
@@ -232,13 +308,16 @@ class PostventaController extends Controller
             'formasReembolso' => DocumentoPostventa::FORMAS_REEMBOLSO,
             'reembolsoAutomatico' => $this->esReembolsoAutomatico($venta),
             'pagosReembolsoUi' => $this->pagosReembolsoUi($venta),
+            'creditoPostventa' => $venta->cuentaPorCobrar !== null,
+            'abonosReembolsoUi' => $this->abonosReembolsoUi($venta),
         ]);
     }
 
     public function devolver(Request $request, Venta $venta)
     {
-        $venta->loadMissing('pagos');
-        $automatico = $this->esReembolsoAutomatico($venta);
+        $venta->loadMissing(['pagos', 'cuentaPorCobrar']);
+        $esCredito = $venta->cuentaPorCobrar !== null;
+        $automatico = $esCredito || $this->esReembolsoAutomatico($venta);
 
         $rules = [
             'motivo' => ['required', 'string', 'min:3', 'max:2000'],
@@ -251,6 +330,8 @@ class PostventaController extends Controller
             'detalles.*' => ['required', 'integer', 'distinct'],
             'referencias_reembolso' => ['nullable', 'array'],
             'referencias_reembolso.*' => ['nullable', 'string', 'max:100'],
+            'referencias_reembolso_cxc' => ['nullable', 'array'],
+            'referencias_reembolso_cxc.*' => ['nullable', 'string', 'max:100'],
             'referencia_reembolso' => ['nullable', 'string', 'max:100'],
         ];
 
@@ -274,7 +355,8 @@ class PostventaController extends Controller
                     ? null
                     : ($data['forma_reembolso'] ?? null),
                 $data['referencias_reembolso'] ?? [],
-                $data['referencia_reembolso'] ?? null
+                $data['referencia_reembolso'] ?? null,
+                $data['referencias_reembolso_cxc'] ?? []
             );
         } catch (DomainException $e) {
             $campo = $this->esErrorFinancieroPostventa($e)
@@ -305,6 +387,9 @@ class PostventaController extends Controller
             'detalles.ventaDetalle',
             'reembolsos',
             'reembolsos.pagoVenta',
+            'reembolsos.movimientoCxC',
+            'reembolsos.movimientoCxC.cuentaPorCobrar',
+            'movimientoCxCDeuda',
         ]);
 
         return view('postventa.show', [
@@ -321,6 +406,9 @@ class PostventaController extends Controller
             'detalles.item.categoria',
             'reembolsos',
             'reembolsos.pagoVenta',
+            'reembolsos.movimientoCxC',
+            'reembolsos.movimientoCxC.cuentaPorCobrar',
+            'movimientoCxCDeuda',
         ]);
 
         return view('postventa.print', [

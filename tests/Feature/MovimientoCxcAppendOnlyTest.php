@@ -2,6 +2,7 @@
 
 use App\Models\Cliente;
 use App\Models\CuentaPorCobrar;
+use App\Models\DocumentoPostventa;
 use App\Models\MovimientoCxC;
 use App\Models\User;
 use App\Models\Venta;
@@ -38,6 +39,18 @@ function mxcCuenta(): CuentaPorCobrar
     ]);
 
     return app(CuentaPorCobrarService::class)->crearParaVenta($venta, 100000, mxcUsuario());
+}
+
+function mxcDocumento(CuentaPorCobrar $cuenta, string $tipo, string $total): DocumentoPostventa
+{
+    return DocumentoPostventa::create([
+        'venta_id' => $cuenta->venta_id,
+        'tipo' => $tipo,
+        'user_id' => mxcUsuario()->id,
+        'motivo' => 'Doc para ledger CxC.',
+        'forma_reembolso' => DocumentoPostventa::FORMA_EFECTIVO,
+        'total' => $total,
+    ]);
 }
 
 it('efectoDeTipo mapea los cinco tipos', function () {
@@ -170,6 +183,7 @@ it('método solo EFECTIVO/TARJETA/TRANSFERENCIA', function () {
 
 it('tipos no ABONO obligan metodo NULL', function () {
     $cuenta = mxcCuenta();
+    $doc = mxcDocumento($cuenta, DocumentoPostventa::TIPO_DEVOLUCION, '400.00');
 
     expect(fn () => MovimientoCxC::create([
         'cuenta_por_cobrar_id' => $cuenta->id,
@@ -179,6 +193,7 @@ it('tipos no ABONO obligan metodo NULL', function () {
         'saldo_antes_centavos' => 100000,
         'saldo_despues_centavos' => 90000,
         'metodo' => 'EFECTIVO',
+        'documento_postventa_id' => $doc->id,
     ]))->toThrow(QueryException::class);
 });
 
@@ -208,6 +223,7 @@ it('tipos no REVERSA obligan origen NULL', function () {
         'saldo_despues_centavos' => 60000,
         'metodo' => 'EFECTIVO',
     ]);
+    $doc = mxcDocumento($cuenta, DocumentoPostventa::TIPO_DEVOLUCION, '400.00');
 
     expect(fn () => MovimientoCxC::create([
         'cuenta_por_cobrar_id' => $cuenta->id,
@@ -217,6 +233,7 @@ it('tipos no REVERSA obligan origen NULL', function () {
         'saldo_antes_centavos' => 60000,
         'saldo_despues_centavos' => 50000,
         'movimiento_origen_id' => $abono->id,
+        'documento_postventa_id' => $doc->id,
     ]))->toThrow(QueryException::class);
 });
 
@@ -353,6 +370,7 @@ it('REVERSA correcta: after = before + monto', function () {
 
 it('CANCELACION exige monto = before y after = 0', function () {
     $cuenta = mxcCuenta();
+    $doc = mxcDocumento($cuenta, DocumentoPostventa::TIPO_CANCELACION, '1000.00');
 
     $ok = MovimientoCxC::create([
         'cuenta_por_cobrar_id' => $cuenta->id,
@@ -361,22 +379,25 @@ it('CANCELACION exige monto = before y after = 0', function () {
         'monto_centavos' => 100000,
         'saldo_antes_centavos' => 100000,
         'saldo_despues_centavos' => 0,
+        'documento_postventa_id' => $doc->id,
     ]);
     expect($ok->saldo_despues_centavos)->toBe(0);
 
-    // monto != before -> rechazada
+    // monto != before -> rechazada (con documento válido, falla la aritmética).
     expect(fn () => MovimientoCxC::create([
-        'cuenta_por_cobrar_id' => mxcCuenta()->id,
+        'cuenta_por_cobrar_id' => $cuenta->id,
         'user_id' => mxcUsuario()->id,
         'tipo' => MovimientoCxC::TIPO_CANCELACION,
         'monto_centavos' => 50000,
         'saldo_antes_centavos' => 60000,
         'saldo_despues_centavos' => 10000,
+        'documento_postventa_id' => $doc->id,
     ]))->toThrow(QueryException::class);
 });
 
 it('REDUCCION_POSTVENTA: after = before - monto', function () {
     $cuenta = mxcCuenta();
+    $doc = mxcDocumento($cuenta, DocumentoPostventa::TIPO_DEVOLUCION, '400.00');
 
     $mov = MovimientoCxC::create([
         'cuenta_por_cobrar_id' => $cuenta->id,
@@ -385,6 +406,7 @@ it('REDUCCION_POSTVENTA: after = before - monto', function () {
         'monto_centavos' => 20000,
         'saldo_antes_centavos' => 100000,
         'saldo_despues_centavos' => 80000,
+        'documento_postventa_id' => $doc->id,
     ]);
 
     expect($mov->saldo_despues_centavos)->toBe(80000);

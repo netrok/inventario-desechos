@@ -36,6 +36,10 @@
 
                         pagos: @json($pagosReembolsoUi),
 
+                        abonos: @json($abonosReembolsoUi),
+
+                        saldoCentavos: {{ $venta->cuentaPorCobrar?->saldo_centavos ?? 0 }},
+
                         updateTotal() {
                             const checks = [
                                 ...this.$el.querySelectorAll(
@@ -58,6 +62,72 @@
                                     maximumFractionDigits: 2
                                 }
                             );
+                        },
+
+                        reduccionDeuda() {
+                            return Math.min(
+                                this.saldoCentavos,
+                                this.totalCentavos
+                            );
+                        },
+
+                        reembolsoMonetario() {
+                            return Math.max(
+                                0,
+                                this.totalCentavos - this.reduccionDeuda()
+                            );
+                        },
+
+                        abonoReembolso(abonoId) {
+                            let restante = this.reembolsoMonetario();
+
+                            for (const abono of this.abonos) {
+                                if (restante <= 0) {
+                                    break;
+                                }
+
+                                const disponible = abono.disponible_centavos;
+
+                                if (disponible <= 0) {
+                                    continue;
+                                }
+
+                                const tomar = Math.min(disponible, restante);
+
+                                if (Number(abono.id) === Number(abonoId)) {
+                                    return tomar;
+                                }
+
+                                restante -= tomar;
+                            }
+
+                            return 0;
+                        },
+
+                        efectivoEnReembolso() {
+                            let restante = this.reembolsoMonetario();
+
+                            for (const abono of this.abonos) {
+                                if (restante <= 0) {
+                                    break;
+                                }
+
+                                const disponible = abono.disponible_centavos;
+
+                                if (disponible <= 0) {
+                                    continue;
+                                }
+
+                                const tomar = Math.min(disponible, restante);
+
+                                if (abono.metodo === 'EFECTIVO') {
+                                    return true;
+                                }
+
+                                restante -= tomar;
+                            }
+
+                            return false;
                         },
 
                         reembolsoPago(pagoId) {
@@ -248,6 +318,124 @@
                         <x-input-error :messages="$errors->get('motivo')" class="mt-2" />
                     </div>
 
+                    @if($creditoPostventa)
+                        <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+                            <div>
+                                <h3 class="text-sm font-bold text-indigo-900">
+                                    Aplicación deuda-primero (crédito)
+                                </h3>
+
+                                <p class="mt-1 text-xs text-indigo-800">
+                                    El importe de los equipos seleccionados se aplica PRIMERO a reducir la
+                                    deuda pendiente de la Cuenta por Cobrar y <strong>solo el sobrante</strong>
+                                    se entrega como reembolso monetario (por el mismo medio con el que se cobró).
+                                </p>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                <div class="rounded-lg border border-indigo-100 bg-white px-3 py-2">
+                                    <div class="text-[11px] text-indigo-600">A devolver</div>
+                                    <div class="font-bold text-gray-900" x-text="money(totalCentavos)">0.00</div>
+                                </div>
+                                <div class="rounded-lg border border-indigo-100 bg-white px-3 py-2">
+                                    <div class="text-[11px] text-indigo-600">Reembolso monetario</div>
+                                    <div class="font-bold text-gray-900" x-text="money(reembolsoMonetario())">0.00</div>
+                                </div>
+                            </div>
+
+                            @if($abonosReembolsoUi)
+                                <div class="overflow-hidden rounded-lg border border-indigo-100 bg-white">
+                                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                        <thead class="bg-gray-50">
+                                            <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                <th class="px-4 py-2">Abono CxC</th>
+                                                <th class="px-4 py-2 text-right">Disponible</th>
+                                                <th class="px-4 py-2 text-right">Esta devolución</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody class="divide-y divide-gray-100">
+                                            @foreach($abonosReembolsoUi as $abono)
+                                                <tr>
+                                                    <td class="px-4 py-3 font-semibold text-gray-900">
+                                                        {{ $abono['metodo'] }}
+                                                        <span class="text-xs font-normal text-gray-400">(abono CxC)</span>
+                                                    </td>
+
+                                                    <td class="px-4 py-3 text-right text-gray-700">
+                                                        {{ \App\Support\Money::formatear(
+                                                            \App\Support\Money::aPrecio($abono['disponible_centavos'])
+                                                        ) }}
+                                                    </td>
+
+                                                    <td
+                                                        class="px-4 py-3 text-right font-bold text-gray-900"
+                                                        x-text="money(abonoReembolso({{ $abono['id'] }}))"
+                                                    >
+                                                        0.00
+                                                    </td>
+                                                </tr>
+
+                                                @if(in_array($abono['metodo'], ['TARJETA', 'TRANSFERENCIA'], true))
+                                                    <tr class="bg-gray-50">
+                                                        <td colspan="3" class="px-4 py-3">
+                                                            <label class="block text-xs font-semibold text-gray-700">
+                                                                Referencia de devolución {{ $abono['metodo'] }} (abono CxC)
+                                                            </label>
+
+                                                            <input
+                                                                type="text"
+                                                                name="referencias_reembolso_cxc[{{ $abono['id'] }}]"
+                                                                value="{{ old('referencias_reembolso_cxc.'.$abono['id']) }}"
+                                                                maxlength="100"
+                                                                autocomplete="off"
+                                                                placeholder="Folio o autorización de la devolución"
+                                                                x-bind:required="abonoReembolso({{ $abono['id'] }}) > 0"
+                                                                x-bind:disabled="abonoReembolso({{ $abono['id'] }}) === 0"
+                                                                class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-gray-900 focus:ring-gray-900 disabled:bg-gray-100"
+                                                            >
+
+                                                            <p class="mt-1 text-[11px] text-gray-500">
+                                                                Solo es necesaria cuando esta devolución tiene importe en ese método.
+                                                            </p>
+                                                        </td>
+                                                    </tr>
+                                                @endif
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @endif
+
+                            <p
+                                class="text-xs text-indigo-900"
+                                x-show="reembolsoMonetario() === 0"
+                                x-cloak
+                            >
+                                La deuda pendiente absorbe todo el importe de esta devolución.
+                                <strong>No se entregará dinero</strong> en esta operación.
+                            </p>
+
+                            <p
+                                class="text-xs text-indigo-900"
+                                x-show="reembolsoMonetario() > 0 && ! efectivoEnReembolso()"
+                                x-cloak
+                            >
+                                Los abonos que absorben el reembolso no incluyen efectivo: no se tocará la caja física.
+                            </p>
+
+                            <p
+                                class="text-xs text-indigo-900"
+                                x-show="efectivoEnReembolso()"
+                                x-cloak
+                            >
+                                El componente en <strong>EFECTIVO</strong> saldrá de la caja abierta y quedará
+                                registrado automáticamente en el corte.
+                            </p>
+                        </div>
+                    @endif
+
+                    @if(! $creditoPostventa)
                     @if($reembolsoAutomatico)
                         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
                             <div>
@@ -386,6 +574,7 @@
                                 >
                             </div>
                         </div>
+                    @endif
                     @endif
 
                     @if($errors->has('reembolso'))

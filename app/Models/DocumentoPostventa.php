@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 class DocumentoPostventa extends Model
@@ -74,6 +75,15 @@ class DocumentoPostventa extends Model
         return $this->hasMany(ReembolsoPostventa::class, 'documento_postventa_id')
             ->orderBy('orden')
             ->orderBy('id');
+    }
+
+    public function movimientoCxCDeuda(): HasOne
+    {
+        return $this->hasOne(MovimientoCxC::class, 'documento_postventa_id')
+            ->whereIn('tipo', [
+                MovimientoCxC::TIPO_REDUCCION_POSTVENTA,
+                MovimientoCxC::TIPO_CANCELACION,
+            ]);
     }
 
     public function esCancelacion(): bool

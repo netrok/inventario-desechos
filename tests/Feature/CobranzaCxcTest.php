@@ -2,15 +2,20 @@
 
 use App\Models\Cliente;
 use App\Models\CuentaPorCobrar;
+use App\Models\DocumentoPostventa;
+use App\Models\Item;
 use App\Models\MovimientoCaja;
 use App\Models\MovimientoCxC;
 use App\Models\PagoVenta;
+use App\Models\ReembolsoPostventa;
 use App\Models\User;
 use App\Models\Venta;
+use App\Models\VentaDetalle;
 use App\Services\CajaService;
 use App\Services\CuentaPorCobrarService;
 use App\Services\PostventaService;
 use App\Support\CxCAcceso;
+use App\Support\Money;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -1211,20 +1216,59 @@ it('el detalle expone el ledger cronológico con método derivado', function () 
 
 /**
  * =========================
- * Interlock postventa (B15.3) y guards
+ * Postventa debt-first con CxC (B15.5) y guards
  * =========================
  */
-it('la postventa sigue bloqueada aunque la CxC haya recibido abonos (interlock B15.3)', function () {
+it('la postventa con CxC cancela la deuda y restituye el dinero de los abonos (B15.5 debt-first)', function () {
     $this->actingAs(cobzActor());
 
-    $cuenta = cobzCuenta(cobzCliente());
-    cobzAbono($cuenta, 40000, MovimientoCxC::METODO_TARJETA, cobzActor(), 'TRX-1');
-    cobzAbono($cuenta, 40000, MovimientoCxC::METODO_TARJETA, cobzActor(), 'TRX-2');
+    $item = Item::create(['estado' => 'DISPONIBLE', 'precio' => 500.0]);
+    $item2 = Item::create(['estado' => 'DISPONIBLE', 'precio' => 500.0]);
+    $cliente = cobzCliente();
 
+    $cuenta = cobzCuenta($cliente, 100000);
     $venta = $cuenta->venta;
 
-    expect(fn () => app(PostventaService::class)->cancelar($venta, 'Quisiera cancelar.'))
-        ->toThrow(DomainException::class, 'requiere el flujo de cuenta por cobrar');
+    VentaDetalle::create(['venta_id' => $venta->id, 'item_id' => $item->id, 'precio' => '500.00']);
+    VentaDetalle::create(['venta_id' => $venta->id, 'item_id' => $item2->id, 'precio' => '500.00']);
+    $item->update(['estado' => 'VENDIDO']);
+    $item2->update(['estado' => 'VENDIDO']);
+
+    $abonoViejo = cobzAbono($cuenta, 40000, MovimientoCxC::METODO_TARJETA, cobzActor(), 'TRX-1');
+    $abonoNuevo = cobzAbono($cuenta, 40000, MovimientoCxC::METODO_TARJETA, cobzActor(), 'TRX-2');
+
+    $documento = app(PostventaService::class)->cancelar(
+        $venta,
+        'Quisiera cancelar.',
+        null,
+        [],
+        null,
+        [(int) $abonoViejo->id => 'REF-1', (int) $abonoNuevo->id => 'REF-2'],
+    );
+
+    expect($documento->tipo)->toBe(DocumentoPostventa::TIPO_CANCELACION);
+    expect($cuenta->refresh()->saldo_centavos)->toBe(0);
+    expect($cuenta->estado)->toBe(CuentaPorCobrar::ESTADO_CANCELADA);
+
+    $deuda = MovimientoCxC::where('cuenta_por_cobrar_id', $cuenta->id)
+        ->where('tipo', MovimientoCxC::TIPO_CANCELACION)
+        ->first();
+    expect($deuda)->not->toBeNull();
+    expect($deuda->monto_centavos)->toBe(20000);
+    expect($deuda->documento_postventa_id)->toBe($documento->id);
+
+    expect($documento->reembolsos)->toHaveCount(2);
+    expect($documento->reembolsos->pluck('origen')->all())->each->toBe(ReembolsoPostventa::ORIGEN_CXC_ABONO);
+    expect($documento->reembolsos->pluck('monto')->map(
+        fn ($m) => Money::aCentavos((string) $m)
+    )->sortDesc()->values()->all())->toBe([40000, 40000]);
+    expect($documento->reembolsos->pluck('movimiento_cxc_id')->sort()->values()->all())
+        ->toBe([(int) $abonoViejo->id, (int) $abonoNuevo->id]);
+
+    expect($venta->refresh()->estado)->toBe(Venta::ESTADO_CANCELADA);
+    expect($item->refresh()->estado)->toBe('DISPONIBLE');
+    expect($item2->refresh()->estado)->toBe('DISPONIBLE');
+    $this->assertDatabaseCount('movimientos_caja', 0);
 });
 
 it('CxCAcceso reserva la reversa al rol Admin y no la otorga a otro rol', function () {

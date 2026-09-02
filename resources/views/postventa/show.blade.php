@@ -109,6 +109,73 @@
                 </table>
             </div>
 
+            {{-- Desglose económico (B15.5): deuda + reembolsos monetarios --}}
+            @php
+                $reembolsoMonetarioCentavos = $documento->reembolsos->sum(
+                    fn ($r) => \App\Support\Money::aCentavos((string) $r->monto)
+                );
+                $deudaCentavos = $documento->movimientoCxCDeuda
+                    ? (int) $documento->movimientoCxCDeuda->monto_centavos
+                    : 0;
+            @endphp
+            <div class="rounded-2xl border border-gray-200 bg-white p-4">
+                <div class="text-xs text-gray-500 uppercase tracking-wide">Desglose económico</div>
+
+                <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <div>
+                        <div class="text-[11px] text-gray-500">Importe del documento</div>
+                        <div class="font-bold text-gray-900">{{ number_format((float) $documento->total, 2) }}</div>
+                    </div>
+                    <div>
+                        <div class="text-[11px] text-indigo-600">Reducción de deuda CxC</div>
+                        <div class="font-bold text-gray-900">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($deudaCentavos)) }}</div>
+                    </div>
+                    <div>
+                        <div class="text-[11px] text-gray-500">Reembolso monetario</div>
+                        <div class="font-bold text-gray-900">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($reembolsoMonetarioCentavos)) }}</div>
+                    </div>
+                </div>
+
+                @if($documento->movimientoCxCDeuda)
+                    <div class="mt-3 border-t border-gray-100 pt-2 text-sm">
+                        <span class="text-xs text-indigo-600">Aplicado a la Cuenta por Cobrar</span>
+                        <span class="mx-1 font-semibold text-gray-900">
+                            {{ $documento->movimientoCxCDeuda->cuentaPorCobrar?->folio ?? 'CxC' }}
+                        </span>
+                        <span class="text-xs text-gray-400">
+                            — saldo ${{
+                                $documento->movimientoCxCDeuda->cuentaPorCobrar
+                                    ? number_format($documento->movimientoCxCDeuda->cuentaPorCobrar->saldo_centavos / 100, 2)
+                                    : '—'
+                            }}
+                        </span>
+                    </div>
+                @endif
+
+                @if($documento->reembolsos->isNotEmpty())
+                    <div class="mt-3 divide-y divide-gray-100">
+                        @foreach($documento->reembolsos as $reembolso)
+                            <div class="flex flex-wrap items-center justify-between py-2 text-sm">
+                                <div>
+                                    <span class="font-medium text-gray-900">{{ $reembolso->metodo }}</span>
+                                    @if($reembolso->esCxC())
+                                        <span class="ml-2 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">Abono CxC</span>
+                                    @elseif($reembolso->pagoVenta)
+                                        <span class="ml-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Pago checkout</span>
+                                    @else
+                                        <span class="ml-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Manual legacy</span>
+                                    @endif
+                                    @if($reembolso->referencia)
+                                        <span class="ml-2 text-xs text-gray-400">Ref: {{ $reembolso->referencia }}</span>
+                                    @endif
+                                </div>
+                                <div class="font-semibold text-gray-900">{{ number_format((float) $reembolso->monto, 2) }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+
             {{-- Venta original --}}
             <div class="rounded-2xl border border-gray-200 bg-white p-4">
                 <div class="text-xs text-gray-500">Venta original</div>

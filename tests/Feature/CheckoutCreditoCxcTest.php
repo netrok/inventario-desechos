@@ -2,10 +2,12 @@
 
 use App\Models\Cliente;
 use App\Models\CuentaPorCobrar;
+use App\Models\DocumentoPostventa;
 use App\Models\Item;
 use App\Models\MovimientoCaja;
 use App\Models\MovimientoCxC;
 use App\Models\PagoVenta;
+use App\Models\ReembolsoPostventa;
 use App\Models\User;
 use App\Models\Venta;
 use App\Services\CajaService;
@@ -1131,10 +1133,10 @@ it('venta crédito puro si muestra aviso de crédito en detalle', function () {
 
 /**
  * =========================
- * Postventa interlock temporal
+ * Postventa debt-first con CxC (B15.5)
  * =========================
  */
-it('Postventa cancelar venta crédito puro: RECHAZADA, sin reembolso legacy ni DocumentoPostventa', function () {
+it('Postventa cancelar venta crédito puro: CANCELADA, deuda absorbida, sin reembolso monetario', function () {
     $user = creditoSeller();
     $item = creditoItem(500.0);
     $cliente = creditoCliente(limite: '2000.00');
@@ -1153,19 +1155,33 @@ it('Postventa cancelar venta crédito puro: RECHAZADA, sin reembolso legacy ni D
 
     $this->actingAs($user)
         ->post(route('ventas.cancelar.store', $venta), [
-            'motivo' => 'Intento de cancelación.',
-            'forma_reembolso' => 'OTRO',
+            'motivo' => 'Cancelación de la venta a crédito.',
         ])
-        ->assertSessionHasErrors();
+        ->assertRedirect();
 
-    $this->assertDatabaseCount('documentos_postventa', 0);
+    $this->assertDatabaseCount('documentos_postventa', 1);
     $this->assertDatabaseCount('reembolsos_postventa', 0);
-    $this->assertDatabaseCount('cuentas_por_cobrar', 1);
-    expect($venta->refresh()->estado)->toBe(Venta::ESTADO_ACTIVA);
-    expect($item->refresh()->estado)->toBe('VENDIDO');
+    $documento = DocumentoPostventa::first();
+    expect($documento->tipo)->toBe(DocumentoPostventa::TIPO_CANCELACION);
+    expect($documento->total)->toBe('500.00');
+
+    $cxc = CuentaPorCobrar::first();
+    expect($cxc->refresh()->saldo_centavos)->toBe(0);
+    expect($cxc->estado)->toBe(CuentaPorCobrar::ESTADO_CANCELADA);
+
+    $deuda = MovimientoCxC::where('cuenta_por_cobrar_id', $cxc->id)
+        ->where('tipo', MovimientoCxC::TIPO_CANCELACION)
+        ->first();
+    expect($deuda)->not->toBeNull();
+    expect($deuda->monto_centavos)->toBe(50000);
+    expect($deuda->documento_postventa_id)->toBe($documento->id);
+
+    expect($venta->refresh()->estado)->toBe(Venta::ESTADO_CANCELADA);
+    expect($item->refresh()->estado)->toBe('DISPONIBLE');
+    $this->assertDatabaseCount('movimientos_caja', 0); // nada que reembolsar
 });
 
-it('Postventa devolver venta con crédito parcial: RECHAZADA, sin mutación económica', function () {
+it('Postventa devolver venta con crédito parcial: deuda-primero paga el saldo con el medio original', function () {
     $user = creditoSeller();
     $item = creditoItem(1000.0);
     $cliente = creditoCliente(limite: '2000.00');
@@ -1184,17 +1200,37 @@ it('Postventa devolver venta con crédito parcial: RECHAZADA, sin mutación econ
 
     $this->actingAs($user)
         ->post(route('ventas.devolver.store', $venta), [
-            'motivo' => 'Intento de devolución.',
+            'motivo' => 'Devolución con aplicación deuda-primero.',
             'detalles' => [$detalleId],
         ])
-        ->assertSessionHasErrors();
+        ->assertRedirect();
 
-    $this->assertDatabaseCount('documentos_postventa', 0);
-    $this->assertDatabaseCount('reembolsos_postventa', 0);
-    $this->assertDatabaseCount('cuentas_por_cobrar', 1);
-    $this->assertDatabaseCount('movimientos_caja', 1); // solo el cobro original
-    expect($venta->refresh()->estado)->toBe(Venta::ESTADO_ACTIVA);
-    expect($item->refresh()->estado)->toBe('VENDIDO');
+    $this->assertDatabaseCount('documentos_postventa', 1);
+    $this->assertDatabaseCount('reembolsos_postventa', 1);
+    $documento = DocumentoPostventa::first();
+    expect($documento->tipo)->toBe(DocumentoPostventa::TIPO_DEVOLUCION);
+    expect($documento->total)->toBe('1000.00');
+
+    $cxc = CuentaPorCobrar::first();
+    expect($cxc->refresh()->saldo_centavos)->toBe(0); // 60000 - 60000
+
+    $deuda = MovimientoCxC::where('cuenta_por_cobrar_id', $cxc->id)
+        ->where('tipo', MovimientoCxC::TIPO_REDUCCION_POSTVENTA)
+        ->first();
+    expect($deuda)->not->toBeNull();
+    expect($deuda->monto_centavos)->toBe(60000);
+    expect($deuda->documento_postventa_id)->toBe($documento->id);
+
+    $reembolso = ReembolsoPostventa::first();
+    expect($reembolso->origen)->toBe(ReembolsoPostventa::ORIGEN_AUTOMATICO);
+    expect($reembolso->metodo)->toBe(PagoVenta::METODO_EFECTIVO);
+    expect((string) $reembolso->monto)->toBe('400.00');
+    expect((int) $reembolso->pago_venta_id)->toBe((int) $venta->pagos()->first()->id);
+
+    // Caja física: cobro original (400) + reembolso efectivo (400).
+    expect(MovimientoCaja::where('sesion_caja_id', openCajaFor($user)->id)->count())->toBe(2);
+    expect($venta->refresh()->estado)->toBe(Venta::ESTADO_DEVUELTA);
+    expect($item->refresh()->estado)->toBe('DEVUELTO');
 });
 
 it('Postventa de venta SIN crédito conserva el comportamiento existente', function () {

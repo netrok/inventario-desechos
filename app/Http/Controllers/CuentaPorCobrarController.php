@@ -100,6 +100,7 @@ class CuentaPorCobrarController extends Controller
             'movimientos.user',
             'movimientos.movimientoOrigen',
             'movimientos.reversa',
+            'movimientos.documentoPostventa',
         ]);
 
         $sesionAbierta = $this->cajaService->sesionAbiertaDe(Auth::user());

@@ -114,7 +114,31 @@
                 <span class="monto">{{ number_format((float) $documento->total, 2) }}</span>
             </div>
 
-            <div class="motivo">
+            @php
+                    $reembolsoMonetarioCentavos = $documento->reembolsos->sum(
+                        fn ($r) => \App\Support\Money::aCentavos((string) $r->monto)
+                    );
+                    $deudaCentavos = $documento->movimientoCxCDeuda
+                        ? (int) $documento->movimientoCxCDeuda->monto_centavos
+                        : 0;
+                @endphp
+                @if($documento->movimientoCxCDeuda || $documento->reembolsos->isNotEmpty())
+                    <div class="datos">
+                        <div class="datos-wrap"><span class="k">Deuda CxC</span><span class="v">{{ number_format($deudaCentavos / 100, 2) }}</span></div>
+                        <div class="datos-wrap"><span class="k">Reembolso</span><span class="v">{{ number_format($reembolsoMonetarioCentavos / 100, 2) }}</span></div>
+                        @foreach($documento->reembolsos as $reembolso)
+                            <div class="datos-wrap">
+                                <span class="k">
+                                    {{ $reembolso->metodo }}
+                                    {{ $reembolso->esCxC() ? '(CxC)' : ($reembolso->pagoVenta ? '(PAGO)' : '(LEGACY)') }}
+                                </span>
+                                <span class="v">{{ number_format((float) $reembolso->monto, 2) }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                <div class="motivo">
                 <div class="k">Motivo</div>
                 <div>{{ $documento->motivo }}</div>
             </div>

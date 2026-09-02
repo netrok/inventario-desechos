@@ -24,7 +24,7 @@
                     Ticket 58 mm
                 </a>
                 @can('ventas.devolver')
-                    @if($venta->esElegibleParaDevolucion() && ! $venta->cuentaPorCobrar)
+                    @if($venta->esElegibleParaDevolucion())
                         <a href="{{ route('ventas.devolver', $venta) }}"
                            class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100">
                             Devolver equipos
@@ -32,7 +32,7 @@
                     @endif
                 @endcan
                 @can('ventas.cancelar')
-                    @if($venta->esElegibleParaCancelacion() && ! $venta->cuentaPorCobrar)
+                    @if($venta->esElegibleParaCancelacion())
                         <a href="{{ route('ventas.cancelar', $venta) }}"
                            class="inline-flex items-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800 hover:bg-rose-100">
                             Cancelar venta
@@ -153,7 +153,7 @@
                     </div>
                     <p class="mt-2 text-[11px] text-indigo-700">
                         Cobranza y abonos disponibles en el módulo de Cuentas por cobrar.
-                        La postventa de esta venta permanece bloqueada hasta B15.5.
+                        La postventa de esta venta aplica la estrategia deuda-primero.
                     </p>
                 </div>
             @endif

@@ -170,6 +170,12 @@
                                 <td class="px-5 py-3 text-gray-700">{{ $m->created_at?->format('d/m/Y H:i') }}</td>
                                 <td class="px-5 py-3">
                                     <span class="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800">{{ $m->tipo }}</span>
+                                    @if($m->documentoPostventa)
+                                        <a href="{{ route('postventa.show', $m->documentoPostventa) }}"
+                                           class="ml-1 text-xs font-semibold text-indigo-700 hover:underline">
+                                            {{ $m->documentoPostventa->folio }}
+                                        </a>
+                                    @endif
                                 </td>
                                 <td class="px-5 py-3 text-right text-gray-900">
                                     ${{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($m->monto_centavos)) }}

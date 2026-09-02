@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\CuentaPorCobrar;
 use App\Models\MovimientoCaja;
 use App\Models\MovimientoCxC;
+use App\Models\ReembolsoPostventa;
 use App\Models\SesionCaja;
 use App\Models\User;
 use App\Models\Venta;
@@ -390,6 +391,20 @@ final class CuentaPorCobrarService
                 ->where('movimiento_origen_id', $abonoBloqueado->id)
                 ->exists()) {
                 throw new DomainException('Este abono ya fue reversado.');
+            }
+
+            // B15.5 — INTERLOCK: un ABONO que ya financió un reembolso postventa
+            // (reembolsos_postventa.origen = CXC_ABONO) no puede reversarse.
+            // El trigger mxc_reversa_bloquea_reembolso refuerza esto a nivel BD;
+            // aquí se lockea el ABONO, que es el mutex que ya serializa el
+            // reembolso (reembolso_fuente_exacta hace FOR UPDATE del mismo).
+            if (ReembolsoPostventa::query()
+                ->where('movimiento_cxc_id', $abonoBloqueado->id)
+                ->lockForUpdate()
+                ->exists()) {
+                throw new DomainException(
+                    'El abono ya fue utilizado en una operación postventa y no puede reversarse.'
+                );
             }
 
             if ($cuentaBloqueada->estado === CuentaPorCobrar::ESTADO_CANCELADA) {

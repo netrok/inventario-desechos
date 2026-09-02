@@ -5,6 +5,7 @@ namespace App\Models;
 use DomainException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MovimientoCxC extends Model
@@ -57,6 +58,7 @@ class MovimientoCxC extends Model
         'metodo',
         'referencia',
         'movimiento_origen_id',
+        'documento_postventa_id',
         'observaciones',
         'operacion_uuid',
     ];
@@ -68,6 +70,7 @@ class MovimientoCxC extends Model
         'saldo_antes_centavos' => 'integer',
         'saldo_despues_centavos' => 'integer',
         'movimiento_origen_id' => 'integer',
+        'documento_postventa_id' => 'integer',
         'created_at' => 'datetime',
     ];
 
@@ -100,6 +103,16 @@ class MovimientoCxC extends Model
     public function reversa(): HasOne
     {
         return $this->hasOne(self::class, 'movimiento_origen_id');
+    }
+
+    public function documentoPostventa(): BelongsTo
+    {
+        return $this->belongsTo(DocumentoPostventa::class, 'documento_postventa_id');
+    }
+
+    public function reembolsosPostventa(): HasMany
+    {
+        return $this->hasMany(ReembolsoPostventa::class, 'movimiento_cxc_id');
     }
 
     public function movimientoCaja(): HasOne
