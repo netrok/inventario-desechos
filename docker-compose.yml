@@ -1,0 +1,73 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    container_name: inventario_app
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [inventario]
+
+  webserver:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: inventario_nginx
+    ports:
+      - '${APP_PORT:-8080}:80'
+    volumes:
+      - .:/var/www/html:ro
+    depends_on:
+      - app
+    networks: [inventario]
+
+  db:
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
+    container_name: inventario_db
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-inventario_desechos}
+      POSTGRES_USER: ${DB_USERNAME:-inventario}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_EXTRA_DB: ${DB_DATABASE:-inventario_desechos}_test
+    ports:
+      - '${FORWARD_DB_PORT:-5432}:5432'
+    volumes:
+      - db-data:/var/lib/pgsql/16/data
+    healthcheck:
+      test: ['CMD-SHELL', '/usr/pgsql-16/bin/pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [inventario]
+
+  # Node solo compila/observa assets (Vite); no corre en el servidor real
+  # (docs/DEPLOY.md: "Node.js + npm solo para compilar assets en el build").
+  # Por eso NO se basa en Rocky 8: nunca se despliega, solo se usa en dev.
+  node:
+    image: node:20-alpine
+    container_name: inventario_node
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - '${VITE_PORT:-5173}:5173'
+    profiles: ['dev']
+    networks: [inventario]
+
+networks:
+  inventario:
+    driver: bridge
+
+volumes:
+  db-data:
+    driver: local
