@@ -3,6 +3,10 @@
 <head>
     <meta charset="utf-8">
     <title>Ticket {{ $venta->folio }}</title>
+    @php
+        use App\Support\TicketTexto;
+        $cols = TicketTexto::columnas($width);
+    @endphp
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, Roboto, sans-serif; background: #f3f4f6; color: #111827; }
@@ -23,58 +27,33 @@
 
         .stage { display: flex; justify-content: center; padding: 20px 8px; }
 
+        /*
+         * IMPORTANTE (bug 08-sep-2026): el contenido del ticket es texto
+         * monoespaciado real (líneas ya rellenadas con espacios ASCII por
+         * App\Support\TicketTexto), NO layout de flexbox. Esto es a propósito:
+         * algunas impresoras/drivers térmicos aplanan el HTML a texto plano al
+         * imprimir e ignoran por completo el CSS de posición, así que el
+         * espaciado tiene que existir en el propio texto para verse bien en
+         * cualquiera de los dos casos (impresión con CSS o texto plano).
+         * No reemplazar estas líneas por <div> con flexbox / justify-content.
+         */
         .ticket {
             width: {{ $width }}mm;
             background: #ffffff;
             border: 1px solid #d1d5db;
             padding: {{ $width === 58 ? '5px 6px' : '7px 9px' }};
-            font-size: {{ $width === 58 ? '9px' : '11px' }};
+        }
+        .ticket pre {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: {{ $width === 58 ? '10px' : '12px' }};
             line-height: 1.35;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
-
-        .ticket .empresa {
-            text-align: center;
-            font-size: {{ $width === 58 ? '11px' : '13px' }};
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            margin-bottom: 2px;
-        }
-
-        .ticket .empresa-extra {
-            text-align: center;
-            font-size: {{ $width === 58 ? '8px' : '10px' }};
-            color: #4b5563;
-        }
-
-        .datos { border-top: 1px dashed #9ca3af; border-bottom: 1px dashed #9ca3af; padding: 4px 0; margin-bottom: 6px; }
-        .datos-wrap { display: flex; justify-content: space-between; gap: 6px; }
-        .datos-wrap .k { font-weight: 700; }
-        .datos-wrap .v { text-align: right; }
-        .datos .cliente-nombre { font-weight: 700; }
-
-        .item { padding: 5px 0; border-bottom: 1px dotted #d1d5db; }
-        .item .top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
-        .item .codigo { font-weight: 700; }
-        .item .precio { font-weight: 700; white-space: nowrap; }
-        .item .desc { color: #374151; }
-        .item .serie { color: #4b5563; }
-
-        .totales { display: flex; justify-content: space-between; align-items: center; padding: 7px 0 4px; border-bottom: 1px dashed #9ca3af; }
-        .totales .label { font-weight: 700; letter-spacing: 0.5px; }
-        .totales .monto { font-size: {{ $width === 58 ? '14px' : '17px' }}; font-weight: 800; }
-
-        .pagos { border-bottom: 1px dashed #9ca3af; padding: 4px 0; }
-        .pagos .titulo { font-weight: 700; letter-spacing: 0.5px; }
-        .pagos .row { display: flex; justify-content: space-between; gap: 6px; }
-        .pagos .row .k { color: #374151; }
-        .pagos .row .v { font-weight: 700; }
-        .pagos .cambio { color: #b45309; }
-
-        .notas { margin-top: 6px; }
-        .notas .k { font-weight: 700; }
-
-        .pie { text-align: center; margin-top: 8px; color: #4b5563; letter-spacing: 0.3px; white-space: pre-line; }
-        .pie .folio { font-weight: 700; color: #111827; }
+        .ticket .negrita { font-weight: 700; }
+        .ticket .grande { font-size: {{ $width === 58 ? '13px' : '16px' }}; font-weight: 800; }
+        .ticket .tenue { color: #4b5563; }
+        .ticket .cambio { color: #b45309; }
 
         @media print {
             body { background: #ffffff; }
@@ -96,112 +75,133 @@
 
     <div class="stage">
         <div class="ticket">
-            <div class="empresa">{{ $configuracion['empresa_nombre'] ?: config('app.name', 'Inventario ReUse') }}</div>
-            @if($configuracion['empresa_rfc'])
-                <div class="empresa-extra">RFC {{ $configuracion['empresa_rfc'] }}</div>
-            @endif
-            @if($configuracion['empresa_direccion'])
-                <div class="empresa-extra">{{ $configuracion['empresa_direccion'] }}</div>
-            @endif
-            @if($configuracion['empresa_telefono'] || $configuracion['empresa_email'])
-                <div class="empresa-extra">
-                    {{ $configuracion['empresa_telefono'] }}{{ $configuracion['empresa_telefono'] && $configuracion['empresa_email'] ? ' · ' : '' }}{{ $configuracion['empresa_email'] }}
-                </div>
-            @endif
+            <pre>
+<span class="negrita">{{ TicketTexto::centrado($configuracion['empresa_nombre'] ?: config('app.name', 'Inventario ReUse'), $cols) }}</span>
+@if($configuracion['empresa_rfc'])
+<span class="tenue">{{ TicketTexto::centrado('RFC '.$configuracion['empresa_rfc'], $cols) }}</span>
+@endif
+@if($configuracion['empresa_direccion'])
+@foreach(TicketTexto::envolver($configuracion['empresa_direccion'], $cols) as $renglon)
+<span class="tenue">{{ TicketTexto::centrado($renglon, $cols) }}</span>
+@endforeach
+@endif
+@if($configuracion['empresa_telefono'] || $configuracion['empresa_email'])
+<span class="tenue">{{ TicketTexto::centrado(collect([$configuracion['empresa_telefono'], $configuracion['empresa_email']])->filter()->implode('  -  '), $cols) }}</span>
+@endif
 
-            <h1 style="text-align:center; font-size:{{ $width === 58 ? '11px' : '13px' }}; letter-spacing:0.5px; text-transform:uppercase; margin:4px 0 6px;">Comprobante de venta</h1>
+<span class="negrita">{{ TicketTexto::centrado('COMPROBANTE DE VENTA', $cols) }}</span>
+{{ TicketTexto::separador($cols) }}
+@foreach(TicketTexto::linea('Folio', $venta->folio, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Fecha', $venta->created_at->format('Y-m-d H:i'), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Vendedor', $venta->user?->name ?? '-', $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Forma de pago', $venta->forma_pago, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@if($venta->cliente_historico)
+@php $ch = $venta->cliente_historico; @endphp
+@foreach(TicketTexto::linea('Cliente', $ch['nombre'], $cols) as $renglon)
+<span class="negrita">{{ $renglon }}</span>
+@endforeach
+@if($ch['rfc'])
+@foreach(TicketTexto::linea('RFC', $ch['rfc'], $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endif
+@if($ch['telefono'])
+@foreach(TicketTexto::linea('Telefono', $ch['telefono'], $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endif
+@else
+@foreach(TicketTexto::linea('Cliente', 'No registrado', $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endif
+{{ TicketTexto::separador($cols) }}
+@foreach($venta->detalles as $detalle)
+@foreach(TicketTexto::linea($detalle->item?->codigo ?? 'SIN EQUIPO', $preciosFormateados[$detalle->id] ?? $detalle->precio, $cols) as $renglon)
+<span class="negrita">{{ $renglon }}</span>
+@endforeach
+@if($detalle->item)
+@php
+$desc = collect([$detalle->item->marca, $detalle->item->modelo])->filter()->implode(' - ') ?: 'Sin descripcion';
+if ($detalle->item->categoria?->nombre) { $desc .= ' ('.$detalle->item->categoria->nombre.')'; }
+@endphp
+@foreach(TicketTexto::envolver($desc, $cols) as $renglon)
+<span class="tenue">{{ $renglon }}</span>
+@endforeach
+@if($detalle->item->serie)
+<span class="tenue">{{ TicketTexto::envolver('Serie: '.$detalle->item->serie, $cols)[0] }}</span>
+@endif
+@endif
+{{ TicketTexto::separador($cols, '.') }}
+@endforeach
+@foreach(TicketTexto::linea('TOTAL', $totalFormateado, $cols) as $renglon)
+<span class="grande">{{ $renglon }}</span>
+@endforeach
+{{ TicketTexto::separador($cols) }}
+@if($venta->pagos->isNotEmpty())
+<span class="negrita">PAGOS</span>
+@foreach($venta->pagos as $pago)
+@foreach(TicketTexto::linea($pago->metodo, \App\Support\Money::formatear((string) $pago->monto_aplicado), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@if($pago->efectivo_recibido !== null && \App\Support\Money::aCentavos((string) $pago->efectivo_recibido) > 0)
+@foreach(TicketTexto::linea('  Recibido', \App\Support\Money::formatear((string) $pago->efectivo_recibido), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endif
+@if($pago->cambio_entregado !== null && \App\Support\Money::aCentavos((string) $pago->cambio_entregado) > 0)
+@foreach(TicketTexto::linea('  Cambio', \App\Support\Money::formatear((string) $pago->cambio_entregado), $cols) as $renglon)
+<span class="cambio">{{ $renglon }}</span>
+@endforeach
+@endif
+@endforeach
+{{ TicketTexto::separador($cols) }}
+@endif
+@if($venta->cuentaPorCobrar)
+@php $cxc = $venta->cuentaPorCobrar; @endphp
+<span class="negrita">CREDITO (CxC)</span>
+@foreach(TicketTexto::linea('Folio', $cxc->folio, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Financiado', \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->importe_original_centavos)), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Saldo', \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->saldo_centavos)), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Vence', (string) $cxc->fecha_vencimiento?->format('Y-m-d'), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Plazo', $cxc->dias_credito_aplicados.' dia(s)', $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+{{ TicketTexto::separador($cols) }}
+@endif
+@if($venta->notas)
+<span class="negrita">Notas</span>
+@foreach(TicketTexto::envolver($venta->notas, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endif
 
-            <div class="datos">
-                <div class="datos-wrap"><span class="k">Folio</span><span class="v">{{ $venta->folio }}</span></div>
-                <div class="datos-wrap"><span class="k">Fecha</span><span class="v">{{ $venta->created_at->format('Y-m-d H:i') }}</span></div>
-                <div class="datos-wrap"><span class="k">Vendedor</span><span class="v">{{ $venta->user?->name ?? '—' }}</span></div>
-                <div class="datos-wrap"><span class="k">Forma de pago</span><span class="v">{{ $venta->forma_pago }}</span></div>
-
-                @if($venta->cliente_historico)
-                    @php $ch = $venta->cliente_historico; @endphp
-                    <div class="datos-wrap"><span class="k">Cliente</span><span class="v cliente-nombre">{{ $ch['nombre'] }}</span></div>
-                    @if($ch['rfc']) <div class="datos-wrap"><span class="k">RFC</span><span class="v">{{ $ch['rfc'] }}</span></div> @endif
-                    @if($ch['telefono']) <div class="datos-wrap"><span class="k">Teléfono</span><span class="v">{{ $ch['telefono'] }}</span></div> @endif
-                @else
-                    <div class="datos-wrap"><span class="k">Cliente</span><span class="v">No registrado (venta histórica)</span></div>
-                @endif
-            </div>
-
-            @foreach($venta->detalles as $detalle)
-                <div class="item">
-                    <div class="top">
-                        <span class="codigo">{{ $detalle->item?->codigo ?? 'SIN EQUIPO' }}</span>
-                        <span class="precio">{{ $preciosFormateados[$detalle->id] ?? $detalle->precio }}</span>
-                    </div>
-                    @if($detalle->item)
-                        <div class="desc">
-                            {{ collect([$detalle->item->marca, $detalle->item->modelo])->filter()->implode(' · ') ?: 'Sin descripción' }}
-                            @if($detalle->item->categoria?->nombre)
-                                ({{ $detalle->item->categoria->nombre }})
-                            @endif
-                        </div>
-                        @if($detalle->item->serie)
-                            <div class="serie">Serie: {{ $detalle->item->serie }}</div>
-                        @endif
-                    @endif
-                </div>
-            @endforeach
-
-            <div class="totales">
-                <span class="label">Total</span>
-                <span class="monto">{{ $totalFormateado }}</span>
-            </div>
-
-            @if($venta->pagos->isNotEmpty())
-                <div class="pagos">
-                    <div class="titulo">Pagos</div>
-                    @foreach($venta->pagos as $pago)
-                        <div class="row">
-                            <span class="k">{{ $pago->metodo }}</span>
-                            <span class="v">{{ \App\Support\Money::formatear((string) $pago->monto_aplicado) }}</span>
-                        </div>
-                        @if($pago->efectivo_recibido !== null && \App\Support\Money::aCentavos((string) $pago->efectivo_recibido) > 0)
-                            <div class="row">
-                                <span class="k">&nbsp;&nbsp;Recibido</span>
-                                <span class="v">{{ \App\Support\Money::formatear((string) $pago->efectivo_recibido) }}</span>
-                            </div>
-                        @endif
-                        @if($pago->cambio_entregado !== null && \App\Support\Money::aCentavos((string) $pago->cambio_entregado) > 0)
-                            <div class="row">
-                                <span class="k">&nbsp;&nbsp;Cambio</span>
-                                <span class="v cambio">{{ \App\Support\Money::formatear((string) $pago->cambio_entregado) }}</span>
-                            </div>
-                        @endif
-                    @endforeach
-                </div>
-            @endif
-
-            @if($venta->cuentaPorCobrar)
-                @php $cxc = $venta->cuentaPorCobrar; @endphp
-                <div class="pagos">
-                    <div class="titulo">Crédito (CxC)</div>
-                    <div class="row"><span class="k">Folio</span><span class="v">{{ $cxc->folio }}</span></div>
-                    <div class="row"><span class="k">Financiado</span><span class="v">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->importe_original_centavos)) }}</span></div>
-                    <div class="row"><span class="k">Saldo</span><span class="v">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->saldo_centavos)) }}</span></div>
-                    <div class="row"><span class="k">Vence</span><span class="v">{{ $cxc->fecha_vencimiento?->format('Y-m-d') }}</span></div>
-                    <div class="row"><span class="k">Plazo</span><span class="v">{{ $cxc->dias_credito_aplicados }} día(s)</span></div>
-                </div>
-            @endif
-
-            @if($venta->notas)
-                <div class="notas">
-                    <div class="k">Notas</div>
-                    <div>{{ $venta->notas }}</div>
-                </div>
-            @endif
-
-            <div class="pie">
-                <span class="folio">{{ $venta->folio }}</span><br>
-                Gracias por su compra
-                @if($configuracion['ticket_pie'])
-                    <br>{{ $configuracion['ticket_pie'] }}
-                @endif
-            </div>
+<span class="negrita">{{ TicketTexto::centrado($venta->folio, $cols) }}</span>
+<span>{{ TicketTexto::centrado('Gracias por su compra', $cols) }}</span>
+@if($configuracion['ticket_pie'])
+@foreach(explode("\n", $configuracion['ticket_pie']) as $renglonPie)
+@foreach(TicketTexto::envolver($renglonPie, $cols) as $renglon)
+<span class="tenue">{{ TicketTexto::centrado($renglon, $cols) }}</span>
+@endforeach
+@endforeach
+@endif
+</pre>
         </div>
     </div>
 
