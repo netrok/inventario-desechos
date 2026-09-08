@@ -131,6 +131,8 @@ class RolesAndAdminSeeder extends Seeder
         $almacenRole = Role::where('name', 'Almacen')->where('guard_name', $guard)->firstOrFail();
         $ventasRole = Role::where('name', 'Ventas')->where('guard_name', $guard)->firstOrFail();
         $auditorRole = Role::where('name', 'Auditor')->where('guard_name', $guard)->firstOrFail();
+        $operadorRole = Role::where('name', 'Operador')->where('guard_name', $guard)->firstOrFail();
+        $consultaRole = Role::where('name', 'Consulta')->where('guard_name', $guard)->firstOrFail();
 
         // Almacén (operativo de inventario)
         $almacenPermisos = [
@@ -188,6 +190,27 @@ class RolesAndAdminSeeder extends Seeder
             'cxc.ver',
         ];
 
+        // Operador (almacén limitado): ve y mueve items (mueve ubicación,
+        // cambia estado de ciclo de vida) pero NO crea/edita el catálogo
+        // (items, categorías, ubicaciones) ni tiene acceso a ventas, cajas,
+        // clientes, reportes o configuración. Pensado para quien solo
+        // despacha/mueve mercancía, sin administrar el catálogo (a diferencia
+        // de Almacen, que sí puede crear/editar).
+        $operadorPermisos = [
+            'dashboard.ver',
+            'items.ver',
+            'items.mover',
+            'items.cambiar_estado',
+        ];
+
+        // Consulta (solo lectura, mismo alcance que Auditor: 08-sep-2026 se
+        // detectó que este rol existía sin permisos desde el seeder original,
+        // dejando a cualquier usuario asignado con 0 permisos y 403 en todo,
+        // incluido el dashboard). Se mantiene igual a Auditor a propósito
+        // para no duplicar matrices; si en el futuro deben diferir, separar
+        // aquí explícitamente.
+        $consultaPermisos = $auditorPermisos;
+
         // Guard server-side: la Configuración General solo puede editarla Admin.
         // configuracion.editar queda prohibido para cualquier rol no Admin, aunque
         // más adelante alguien edite este seeder o exista una futura UI de roles.
@@ -196,6 +219,8 @@ class RolesAndAdminSeeder extends Seeder
             'Almacen' => $almacenPermisos,
             'Ventas' => $ventasPermisos,
             'Auditor' => $auditorPermisos,
+            'Operador' => $operadorPermisos,
+            'Consulta' => $consultaPermisos,
         ]);
 
         // Guard server-side B15.1: creditos.configurar es Admin-only.
@@ -205,6 +230,8 @@ class RolesAndAdminSeeder extends Seeder
             'Almacen' => $almacenPermisos,
             'Ventas' => $ventasPermisos,
             'Auditor' => $auditorPermisos,
+            'Operador' => $operadorPermisos,
+            'Consulta' => $consultaPermisos,
         ]);
 
         // Guard server-side B15.4: cxc.reversar_abono es Admin-only.
@@ -213,6 +240,8 @@ class RolesAndAdminSeeder extends Seeder
             'Almacen' => $almacenPermisos,
             'Ventas' => $ventasPermisos,
             'Auditor' => $auditorPermisos,
+            'Operador' => $operadorPermisos,
+            'Consulta' => $consultaPermisos,
         ]);
 
         // Admin = todo
@@ -223,6 +252,10 @@ class RolesAndAdminSeeder extends Seeder
         $ventasRole->syncPermissions($ventasPermisos);
 
         $auditorRole->syncPermissions($auditorPermisos);
+
+        $operadorRole->syncPermissions($operadorPermisos);
+
+        $consultaRole->syncPermissions($consultaPermisos);
 
         /**
          * Caja física principal (idempotente por CÓDIGO, B14).
