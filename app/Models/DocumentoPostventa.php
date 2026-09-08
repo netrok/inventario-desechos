@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 class DocumentoPostventa extends Model
@@ -19,6 +20,8 @@ class DocumentoPostventa extends Model
         self::TIPO_CANCELACION,
         self::TIPO_DEVOLUCION,
     ];
+
+    public const FORMA_EFECTIVO = 'EFECTIVO';
 
     public const FORMAS_REEMBOLSO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'OTRO'];
 
@@ -65,6 +68,22 @@ class DocumentoPostventa extends Model
     public function detalles(): HasMany
     {
         return $this->hasMany(DocumentoPostventaDetalle::class, 'documento_postventa_id');
+    }
+
+    public function reembolsos(): HasMany
+    {
+        return $this->hasMany(ReembolsoPostventa::class, 'documento_postventa_id')
+            ->orderBy('orden')
+            ->orderBy('id');
+    }
+
+    public function movimientoCxCDeuda(): HasOne
+    {
+        return $this->hasOne(MovimientoCxC::class, 'documento_postventa_id')
+            ->whereIn('tipo', [
+                MovimientoCxC::TIPO_REDUCCION_POSTVENTA,
+                MovimientoCxC::TIPO_CANCELACION,
+            ]);
     }
 
     public function esCancelacion(): bool

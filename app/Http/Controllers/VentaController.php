@@ -52,6 +52,8 @@ class VentaController extends Controller
             'detalles.item.categoria',
             'documentosPostventa.user',
             'documentosPostventa.detalles.item',
+            'pagos',
+            'cuentaPorCobrar',
         ]);
 
         return view('ventas.show', ['venta' => $venta]);
@@ -71,6 +73,8 @@ class VentaController extends Controller
             'user',
             'detalles.item',
             'detalles.item.categoria',
+            'pagos',
+            'cuentaPorCobrar',
         ]);
 
         $defaultWidth = Configuracion::ticketAncho();

@@ -117,11 +117,11 @@ it('registra una venta simple de forma atomica', function () {
     $item = posItem(999.99);
 
     posSession($item);
+    openCajaFor($user);
 
-    $response = $this->actingAs($user)->post(route('pos.checkout'), [
+    $response = $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'EFECTIVO',
-    ]);
+    ], pagosEfectivo(999.99)));
 
     $this->assertDatabaseCount('ventas', 1);
     $this->assertDatabaseCount('venta_detalles', 1);
@@ -162,11 +162,11 @@ it('registra una venta de varios equipos con el total calculado en el servidor',
     $c = posItem(99.99);
 
     posSession([$a, $b, $c]);
+    openCajaFor($user);
 
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$a->id, $b->id, $c->id],
-        'forma_pago' => 'TRANSFERENCIA',
-    ]);
+    ], pagosMetodo(450.49, 'TRANSFERENCIA', 'REF-01')));
 
     $this->assertDatabaseCount('ventas', 1);
     $this->assertDatabaseCount('venta_detalles', 3);
@@ -189,12 +189,12 @@ it('ignora un total manipulado y usa siempre el importe real de la BD', function
     $b = posItem(250.5);
 
     posSession([$a, $b]);
+    openCajaFor($user);
 
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$a->id, $b->id],
-        'forma_pago' => 'EFECTIVO',
         'total' => '1.25',
-    ]);
+    ], pagosEfectivo(350.50)));
 
     $this->assertDatabaseCount('ventas', 1);
 
@@ -206,12 +206,12 @@ it('persiste el precio de BD en el detalle aunque se intente manipular', functio
     $item = posItem(777.77);
 
     posSession($item);
+    openCajaFor($user);
 
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'OTRO',
         'precio' => '1.00',
-    ]);
+    ], pagosEfectivo(777.77)));
 
     $this->assertDatabaseCount('venta_detalles', 1);
     expect((string) VentaDetalle::first()->precio)->toBe('777.77');
@@ -302,12 +302,12 @@ it('un estado desconocido/corrupto en BD no es vendible ni por agregar ni por ch
 
     // Checkout directo sobre el mismo equipo tampoco debe producir venta.
     posSession($item);
+    openCajaFor($user);
 
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(500.0)))
         ->assertSessionHasErrors('items');
 
     $this->assertDatabaseCount('ventas', 0);
@@ -325,12 +325,12 @@ it('el checkout aborta toda la venta cuando un equipo ya fue vendido', function 
     $vendido = posItem(300.0, 'VENDIDO');
 
     posSession($vendido);
+    openCajaFor($user);
 
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$vendido->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(300.0)))
         ->assertSessionHasErrors('items');
 
     $this->assertDatabaseCount('ventas', 0);
@@ -344,12 +344,12 @@ it('el checkout aborta con BAJA y conserva el carrito', function () {
     $baja = posItem(300.0, 'BAJA');
 
     posSession($baja);
+    openCajaFor($user);
 
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$baja->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(300.0)))
         ->assertSessionHasErrors('items');
 
     $this->assertDatabaseCount('ventas', 0);
@@ -363,12 +363,12 @@ it('hace rollback total si un equipo del carrito deja de ser vendible', function
     $b = posItem(200.0, 'VENDIDO'); // inválido (vendido por otra vía)
 
     posSession([$a, $b]);
+    openCajaFor($user);
 
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$a->id, $b->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(300.0)))
         ->assertSessionHasErrors('items');
 
     // Nada se escribió: ni venta, ni detalles, ni movimientos.
@@ -391,10 +391,11 @@ it('un mismo equipo solo se puede vender una vez (segunda venta aborta)', functi
     $item = posItem(150.0);
 
     posSession($item);
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    openCajaFor($user);
+
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'EFECTIVO',
-    ]);
+    ], pagosEfectivo(150.0)));
 
     $this->assertDatabaseCount('ventas', 1);
     $this->assertDatabaseCount('movimientos', 1);
@@ -402,10 +403,10 @@ it('un mismo equipo solo se puede vender una vez (segunda venta aborta)', functi
     // Segundo usuario intenta vender el mismo equipo.
     $other = posSeller();
     posSession($item);
-    $this->actingAs($other)->post(route('pos.checkout'), [
+    openCajaFor($other);
+    $this->actingAs($other)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'TARJETA',
-    ])->assertSessionHasErrors('items');
+    ], pagosMetodo(150.0, 'TARJETA', 'TRX-X')))->assertSessionHasErrors('items');
 
     // El segundo no ganó: sin venta nueva, sin segundo Movimiento VENTA.
     $this->assertDatabaseCount('ventas', 1);
@@ -435,12 +436,12 @@ it('detecta cambios de estado ocurridos entre la lectura y el lock (lectura stal
     });
 
     posSession($item);
+    openCajaFor($user);
 
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(150.0)))
         ->assertSessionHasErrors('items');
 
     $this->assertDatabaseCount('ventas', 0);
@@ -472,9 +473,9 @@ it('valida la forma de pago', function () {
     $this->actingAs($user)
         ->post(route('pos.checkout'), [
             'items' => [$item->id],
-            'forma_pago' => 'CREDITO',
+            'pagos' => [['metodo' => 'CREDITO', 'monto_aplicado' => '1.00']],
         ])
-        ->assertSessionHasErrors('forma_pago');
+        ->assertSessionHasErrors('pagos.0.metodo');
 });
 
 it('rechaza un carrito enviado que no coincide con la sesion', function () {
@@ -482,12 +483,12 @@ it('rechaza un carrito enviado que no coincide con la sesion', function () {
     $item = posItem();
 
     posSession($item);
+    openCajaFor($user);
 
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [999999],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(1.00)))
         ->assertSessionHasErrors('items');
 
     $this->assertDatabaseCount('ventas', 0);
@@ -498,6 +499,7 @@ it('hace rollback completo cuando falla la creacion del Movimiento VENTA', funct
     $item = posItem(123.45);
 
     posSession($item);
+    openCajaFor($user);
 
     // Inyección de fallo: la creación de Movimiento falla en medio del checkout.
     Movimiento::creating(function () {
@@ -505,10 +507,9 @@ it('hace rollback completo cuando falla la creacion del Movimiento VENTA', funct
     });
 
     $this->actingAs($user)
-        ->post(route('pos.checkout'), [
+        ->post(route('pos.checkout'), array_merge([
             'items' => [$item->id],
-            'forma_pago' => 'EFECTIVO',
-        ])
+        ], pagosEfectivo(123.45)))
         ->assertStatus(500);
 
     // Rollback completo: nada quedó escrito, ni siquiera el estado del Item.
@@ -618,11 +619,11 @@ it('suma 0.10 + 0.20 = 0.30 exacto y persiste el precio decimal de cada detalle'
     $b = posItem(0.2);
 
     posSession([$a, $b]);
+    openCajaFor($user);
 
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$a->id, $b->id],
-        'forma_pago' => 'EFECTIVO',
-    ]);
+    ], pagosEfectivo(0.30)));
 
     $venta = Venta::first();
     expect((string) $venta->total)->toBe('0.30');
@@ -638,11 +639,11 @@ it('suma 19.99 + 29.99 + 49.99 = 99.97 exacto sin aproximacion', function () {
     $c = posItem(49.99);
 
     posSession([$a, $b, $c]);
+    openCajaFor($user);
 
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$a->id, $b->id, $c->id],
-        'forma_pago' => 'EFECTIVO',
-    ]);
+    ], pagosEfectivo(99.97)));
 
     $venta = Venta::first();
     expect((string) $venta->total)->toBe('99.97');
@@ -701,10 +702,11 @@ it('el listado de ventas muestra folio y total y el detalle enlaza los equipos',
     $item = posItem(555.0);
 
     posSession($item);
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    openCajaFor($user);
+
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'EFECTIVO',
-    ]);
+    ], pagosEfectivo(555.0)));
 
     $venta = Venta::first();
 

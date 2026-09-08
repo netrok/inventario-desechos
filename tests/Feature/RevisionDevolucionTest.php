@@ -9,10 +9,8 @@ use App\Models\Venta;
 use App\Services\PostventaService;
 use App\Services\RevisionDevolucionService;
 use App\Support\Money;
-use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -78,6 +76,7 @@ function revisionEscenario(float $precio = 120.0): array
 
     // La devolución es un acto transaccional del usuario autenticado.
     test()->actingAs($vendedor);
+    openCajaFor($vendedor);
 
     $doc = app(PostventaService::class)->devolver(
         $venta,

@@ -63,6 +63,13 @@
         .totales .label { font-weight: 700; letter-spacing: 0.5px; }
         .totales .monto { font-size: {{ $width === 58 ? '14px' : '17px' }}; font-weight: 800; }
 
+        .pagos { border-bottom: 1px dashed #9ca3af; padding: 4px 0; }
+        .pagos .titulo { font-weight: 700; letter-spacing: 0.5px; }
+        .pagos .row { display: flex; justify-content: space-between; gap: 6px; }
+        .pagos .row .k { color: #374151; }
+        .pagos .row .v { font-weight: 700; }
+        .pagos .cambio { color: #b45309; }
+
         .notas { margin-top: 6px; }
         .notas .k { font-weight: 700; }
 
@@ -80,7 +87,7 @@
 <body>
     <div class="no-print">
         <button type="button" class="print" onclick="window.print()">Imprimir</button>
-        <button type="button" onclick="window.close()">Cerrar</button>
+        <button type="button" onclick="cerrarTicket()">Cerrar</button>
         <a href="{{ route('ventas.show', $venta) }}">← Volver al detalle</a>
         @if($errors->any())
             <span style="color:#fca5a5">{{ $errors->first() }}</span>
@@ -145,6 +152,42 @@
                 <span class="monto">{{ $totalFormateado }}</span>
             </div>
 
+            @if($venta->pagos->isNotEmpty())
+                <div class="pagos">
+                    <div class="titulo">Pagos</div>
+                    @foreach($venta->pagos as $pago)
+                        <div class="row">
+                            <span class="k">{{ $pago->metodo }}</span>
+                            <span class="v">{{ \App\Support\Money::formatear((string) $pago->monto_aplicado) }}</span>
+                        </div>
+                        @if($pago->efectivo_recibido !== null && \App\Support\Money::aCentavos((string) $pago->efectivo_recibido) > 0)
+                            <div class="row">
+                                <span class="k">&nbsp;&nbsp;Recibido</span>
+                                <span class="v">{{ \App\Support\Money::formatear((string) $pago->efectivo_recibido) }}</span>
+                            </div>
+                        @endif
+                        @if($pago->cambio_entregado !== null && \App\Support\Money::aCentavos((string) $pago->cambio_entregado) > 0)
+                            <div class="row">
+                                <span class="k">&nbsp;&nbsp;Cambio</span>
+                                <span class="v cambio">{{ \App\Support\Money::formatear((string) $pago->cambio_entregado) }}</span>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
+
+            @if($venta->cuentaPorCobrar)
+                @php $cxc = $venta->cuentaPorCobrar; @endphp
+                <div class="pagos">
+                    <div class="titulo">Crédito (CxC)</div>
+                    <div class="row"><span class="k">Folio</span><span class="v">{{ $cxc->folio }}</span></div>
+                    <div class="row"><span class="k">Financiado</span><span class="v">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->importe_original_centavos)) }}</span></div>
+                    <div class="row"><span class="k">Saldo</span><span class="v">{{ \App\Support\Money::formatear(\App\Support\Money::aPrecio($cxc->saldo_centavos)) }}</span></div>
+                    <div class="row"><span class="k">Vence</span><span class="v">{{ $cxc->fecha_vencimiento?->format('Y-m-d') }}</span></div>
+                    <div class="row"><span class="k">Plazo</span><span class="v">{{ $cxc->dias_credito_aplicados }} día(s)</span></div>
+                </div>
+            @endif
+
             @if($venta->notas)
                 <div class="notas">
                     <div class="k">Notas</div>
@@ -161,6 +204,21 @@
             </div>
         </div>
     </div>
+
+    <script>
+        function cerrarTicket() {
+            // Si el ticket se abrió desde otra ventana/pestaña de la app,
+            // cerramos solamente el ticket.
+            if (window.opener && !window.opener.closed) {
+                window.close();
+                return;
+            }
+
+            // Si estamos en la pestaña principal, nunca cerramos la app:
+            // regresamos al detalle de la venta.
+            window.location.href = @json(route('ventas.show', $venta));
+        }
+    </script>
 
     @if($autoprint)
         <script>

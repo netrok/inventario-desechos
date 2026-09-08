@@ -5,7 +5,7 @@
             {{-- Header --}}
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <h2 class="text-xl font-semibold text-gray-900 leading-tight">Inventario</h2>
+                    <h2 class="text-xl font-semibold text-gray-900 leading-tight">Inventario operativo</h2>
                     <p class="mt-1 text-sm text-gray-600">
                         Total: <span class="font-semibold text-gray-900">{{ $total }}</span> equipos
                     </p>
@@ -163,6 +163,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Estado</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Ubicación</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Fecha de alta</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Precio de venta</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Notas</th>
                             </tr>
                         </thead>
@@ -199,13 +200,20 @@
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-800">{{ $item->ubicacion?->nombre ?? '—' }}</td>
                                     <td class="px-4 py-3 text-sm text-gray-500">{{ optional($item->created_at)->format('Y-m-d') ?? '—' }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-800">
+                                        @if($item->precio === null)
+                                            —
+                                        @else
+                                            ${{ \App\Support\Money::formatear(\App\Support\Money::aPrecio(\App\Support\Money::aCentavos($item->precio))) }}
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3 text-sm text-gray-500 max-w-[160px] truncate" title="{{ $item->notas ?? '' }}">
                                         {{ $item->notas ?: '—' }}
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="px-4 py-10 text-center">
+                                    <td colspan="10" class="px-4 py-10 text-center">
                                         <div class="text-sm font-semibold text-gray-900">Sin resultados</div>
                                         <div class="mt-1 text-sm text-gray-600">
                                             Prueba con otros filtros o limpia los filtros.

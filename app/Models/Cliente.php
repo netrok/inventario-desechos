@@ -44,10 +44,16 @@ class Cliente extends Model
         'direccion',
         'notas',
         'activo',
+        'credito_habilitado',
+        'limite_credito',
+        'dias_credito',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
+        'credito_habilitado' => 'boolean',
+        'limite_credito' => 'decimal:2',
+        'dias_credito' => 'integer',
     ];
 
     protected static function booted(): void
@@ -74,6 +80,11 @@ class Cliente extends Model
         return $this->hasMany(Venta::class, 'cliente_id');
     }
 
+    public function cuentasPorCobrar(): HasMany
+    {
+        return $this->hasMany(CuentaPorCobrar::class, 'cliente_id');
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -86,6 +97,9 @@ class Cliente extends Model
                 'direccion',
                 'notas',
                 'activo',
+                'credito_habilitado',
+                'limite_credito',
+                'dias_credito',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Caja;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -90,9 +91,30 @@ class RolesAndAdminSeeder extends Seeder
             'clientes.editar',
             'clientes.desactivar',
 
+            // Crédito (B15): configurar crédito por cliente es Admin-only.
+            // NO se asigna a clientes.editar: son permisos distintos.
+            'creditos.configurar',
+
+            // CxC / cobranza (B15.4). reversar_abono es Admin-only (guard CxCAcceso).
+            'cxc.ver',
+            'cxc.abonar',
+            'cxc.reversar_abono',
+
             // Configuración general
             'configuracion.ver',
             'configuracion.editar',
+
+            // Caja / cortes (B14)
+            'cajas.ver',
+            'cajas.configurar',
+            'cajas.abrir',
+            'cajas.operar',
+            'cajas.movimientos',
+            'cajas.cerrar',
+            'cajas.ver_todas',
+            'cajas.ajustar',
+            'cajas.entrada',
+            'cajas.retiro',
         ];
 
         foreach ($perms as $p) {
@@ -125,6 +147,11 @@ class RolesAndAdminSeeder extends Seeder
         // La cancelación es una reversa financiera total reservada a Admin.
         // Clientes: puede ver/crear/editar (para POS necesita clientes), pero
         // NO desactivar (acción de control reservada a Admin).
+        // Caja (B14, matriz SEGURA): opera su propia sesión (abrir, ver
+        // movimientos, cerrar) sin gestionar cajas físicas ni ver historial
+        // global, y SIN libertad de registrar entradas/retiros/ajustes de
+        // efectivo (reservados a Admin vía cajas.entrada/cajas.retiro/cajas.ajustar).
+        // CxC (B15.4): puede ver y ABONAR; NO puede REVERSAR (Admin-only).
         $ventasPermisos = [
             'dashboard.ver',
             'items.ver',
@@ -134,9 +161,19 @@ class RolesAndAdminSeeder extends Seeder
             'clientes.ver',
             'clientes.crear',
             'clientes.editar',
+            'cajas.ver',
+            'cajas.abrir',
+            'cajas.operar',
+            'cajas.movimientos',
+            'cajas.cerrar',
+            'cxc.ver',
+            'cxc.abonar',
         ];
 
         // Auditor (solo lectura) + consulta de configuración y clientes.
+        // Caja (B14): consulta su historial y el global (ver_todas) con acceso
+        // de SOLO lectura; jamás abre/opera/cierra.
+        // CxC (B15.4): solo lectura (cxc.ver).
         $auditorPermisos = [
             'dashboard.ver',
             'items.ver',
@@ -146,12 +183,32 @@ class RolesAndAdminSeeder extends Seeder
             'ventas.ver',
             'clientes.ver',
             'configuracion.ver',
+            'cajas.ver',
+            'cajas.ver_todas',
+            'cxc.ver',
         ];
 
         // Guard server-side: la Configuración General solo puede editarla Admin.
         // configuracion.editar queda prohibido para cualquier rol no Admin, aunque
         // más adelante alguien edite este seeder o exista una futura UI de roles.
         \App\Support\ConfiguracionAcceso::assertRolesSeguros([
+            'Admin' => $perms,
+            'Almacen' => $almacenPermisos,
+            'Ventas' => $ventasPermisos,
+            'Auditor' => $auditorPermisos,
+        ]);
+
+        // Guard server-side B15.1: creditos.configurar es Admin-only.
+        // Cualquier intento de asignarlo a un rol no Admin se rechaza.
+        \App\Support\CreditoAcceso::assertRolesSeguros([
+            'Admin' => $perms,
+            'Almacen' => $almacenPermisos,
+            'Ventas' => $ventasPermisos,
+            'Auditor' => $auditorPermisos,
+        ]);
+
+        // Guard server-side B15.4: cxc.reversar_abono es Admin-only.
+        \App\Support\CxCAcceso::assertRolesSeguros([
             'Admin' => $perms,
             'Almacen' => $almacenPermisos,
             'Ventas' => $ventasPermisos,
@@ -166,6 +223,30 @@ class RolesAndAdminSeeder extends Seeder
         $ventasRole->syncPermissions($ventasPermisos);
 
         $auditorRole->syncPermissions($auditorPermisos);
+
+        /**
+         * Caja física principal (idempotente por CÓDIGO, B14).
+         *
+         * La identidad ESTABLE de la caja es su código (CAJ-000001), no el
+         * nombre visible. Si el usuario renombra "Caja Principal" en el futuro,
+         * re-ejecutar el seeder NO debe crear una caja nueva: solo se crea
+         * cuando no existe una caja con ese código y aún no hay ninguna en el
+         * sistema (la primera creación obtiene CAJ-000001 por secuencia).
+         */
+        $cajaPrincipalExiste = Caja::query()->where('codigo', 'CAJ-000001')->exists();
+
+        if (! $cajaPrincipalExiste && Caja::query()->count() === 0) {
+            Caja::create([
+                'codigo' => 'CAJ-000001',
+                'nombre' => 'Caja Principal',
+                // B14.3.1 FIX 3: la caja ACTIVA exige operador (CHECK). En un
+                // seed inicial aún no existe un usuario con cajas.abrir que
+                // asignar, por lo que se crea INACTIVA para no violar la
+                // restricción. El Admin la activa y asigna desde el maestro.
+                'activa' => false,
+                'descripcion' => 'Caja principal del establecimiento.',
+            ]);
+        }
 
         /**
          * Usuario Admin inicial.

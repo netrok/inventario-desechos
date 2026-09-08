@@ -41,11 +41,11 @@ it('el ticket muestra el snapshot del cliente (RFC y teléfono)', function () {
     ]);
     $item = Item::create(['estado' => 'DISPONIBLE', 'precio' => 100.0]);
     $this->session(['pos.cart' => [$item->id], 'pos.cliente_id' => $cliente->id]);
+    openCajaFor($user);
 
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'EFECTIVO',
-    ]);
+    ], pagosEfectivo(100.0)));
 
     $venta = Venta::first();
 
@@ -62,11 +62,11 @@ it('la reimpresión del ticket es de solo lectura: no muta ventas ni crea movimi
     $item = Item::create(['estado' => 'DISPONIBLE', 'precio' => 100.0]);
     $cliente = Cliente::create(['nombre' => 'C', 'tipo' => 'PERSONA']);
     $this->session(['pos.cart' => [$item->id], 'pos.cliente_id' => $cliente->id]);
+    openCajaFor($user);
 
-    $this->actingAs($user)->post(route('pos.checkout'), [
+    $this->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'EFECTIVO',
-    ]);
+    ], pagosEfectivo(100.0)));
 
     $venta = Venta::first();
     $movimientos = Movimiento::where('item_id', $item->id)->count();

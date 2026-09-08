@@ -10,6 +10,7 @@ use App\Models\DocumentoPostventaDetalle;
 use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Ubicacion;
+use App\Support\ItemCodigo;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -243,26 +244,26 @@ class ItemController extends Controller
 
     /**
      * Pantalla de escaneo/búsqueda por código (scanner USB tipo teclado).
-     * El código normalizado (trim + uppercase) resuelve de forma determinista.
+     * El código se normaliza con ItemCodigo::normalizarLectura() (trim +
+     * uppercase y, para lecturas ITM, separadores equivalentes + 6 dígitos),
+     * resolviendo de forma determinista.
      */
     public function scan(Request $request)
     {
-        $codigo = trim((string) $request->query('codigo', ''));
+        $codigo = ItemCodigo::normalizarLectura($request->query('codigo'));
         $error = null;
 
         if ($codigo !== '') {
-            $normalized = strtoupper($codigo);
-
-            if (mb_strlen($normalized) > 40) {
+            if (mb_strlen($codigo) > 40) {
                 $error = 'El código es demasiado largo.';
             } else {
-                $item = Item::query()->where('codigo', $normalized)->first();
+                $item = Item::query()->where('codigo', $codigo)->first();
 
                 if ($item instanceof Item) {
                     return redirect()->route('items.show', $item);
                 }
 
-                $error = "No existe un equipo con el código {$normalized}.";
+                $error = "No existe un equipo con el código {$codigo}.";
             }
         }
 

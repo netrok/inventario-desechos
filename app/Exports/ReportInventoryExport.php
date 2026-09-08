@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Item;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -36,6 +37,7 @@ class ReportInventoryExport implements FromQuery, ShouldAutoSize, WithHeadings, 
             'Estado',
             'Ubicación',
             'Fecha de alta',
+            'Precio de venta',
             'Notas',
         ];
     }
@@ -54,6 +56,7 @@ class ReportInventoryExport implements FromQuery, ShouldAutoSize, WithHeadings, 
             (string) ($item->estado ?? ''),
             (string) ($item->ubicacion?->nombre ?? ''),
             $item->created_at?->format('Y-m-d') ?? '',
+            $item->precio === null ? '' : Money::aPrecio(Money::aCentavos($item->precio)),
             (string) ($item->notas ?? ''),
         ];
     }

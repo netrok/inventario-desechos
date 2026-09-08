@@ -93,24 +93,33 @@ function ventaVendida(array $precios = [100.0, 250.5], string $estadoVenta = 'AC
 it('asigna folios DEV-XXXXXX consecutivos via sequence', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0]);
+    openCajaFor($admin);
+
+    $seq = DB::selectOne('SELECT last_value, is_called FROM documentos_postventa_folio_seq_generator');
+    $siguiente = $seq->is_called ? (int) $seq->last_value + 1 : (int) $seq->last_value;
+    $folioEsperado = 'DEV-'.str_pad((string) $siguiente, 6, '0', STR_PAD_LEFT);
 
     $this->actingAs($admin)->post(route('ventas.cancelar.store', $venta), [
         'motivo' => 'Reversa total por error del cliente.',
+        'forma_reembolso' => 'EFECTIVO',
     ]);
 
-    $doc = DocumentoPostventa::first();
+    $doc = DocumentoPostventa::where('folio', $folioEsperado)->first();
 
+    expect($doc)->not->toBeNull();
     expect($doc->folio)->toMatch('/^DEV-\d{6}$/');
-    expect($doc->folio)->toBe('DEV-000001');
+    expect($doc->folio)->toBe($folioEsperado);
     expect($doc->tipo)->toBe(DocumentoPostventa::TIPO_CANCELACION);
 });
 
 it('no permite duplicar un folio postventa (UNIQUE BD)', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0]);
+    openCajaFor($admin);
 
     $this->actingAs($admin)->post(route('ventas.cancelar.store', $venta), [
         'motivo' => 'Reversa total por error del cliente.',
+        'forma_reembolso' => 'EFECTIVO',
     ]);
 
     $folio = DocumentoPostventa::first()->folio;
@@ -142,9 +151,11 @@ it('no permite duplicar un folio postventa (UNIQUE BD)', function () {
 it('cancela una venta ACTIVA y revierte todos los equipos a DISPONIBLE', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     $this->actingAs($admin)->post(route('ventas.cancelar.store', $venta), [
         'motivo' => 'Reversa total por solicitud del cliente.',
+        'forma_reembolso' => 'EFECTIVO',
     ])->assertRedirect();
 
     // Ni venta, ni detalles, ni items se borran: todo queda como historial.
@@ -182,16 +193,20 @@ it('cancela una venta ACTIVA y revierte todos los equipos a DISPONIBLE', functio
 it('requiere motivo de cancelacion con al menos 5 caracteres', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0]);
+    openCajaFor($admin);
 
     $this->actingAs($admin)
-        ->post(route('ventas.cancelar.store', $venta), ['motivo' => 'corto']) // 5 chars: pasa
+        ->post(route('ventas.cancelar.store', $venta), [
+            'motivo' => 'corto', // 5 chars: pasa
+            'forma_reembolso' => 'EFECTIVO',
+        ])
         ->assertRedirect();
 
     expect(DocumentoPostventa::count())->toBe(1);
 
     $otra = ventaVendida([100.0]);
     $this->actingAs($admin)
-        ->post(route('ventas.cancelar.store', $otra), ['motivo' => 'cor']) // < 5 chars
+        ->post(route('ventas.cancelar.store', $otra), ['motivo' => 'cor', 'forma_reembolso' => 'EFECTIVO']) // < 5 chars
         ->assertSessionHasErrors('motivo');
 
     expect(DocumentoPostventa::count())->toBe(1);
@@ -201,6 +216,7 @@ it('requiere motivo de cancelacion con al menos 5 caracteres', function () {
 it('no cancela una venta que ya no esta ACTIVA', function (string $estadoNoActiva) {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0], $estadoNoActiva);
+    openCajaFor($admin);
 
     $this->actingAs($admin)
         ->get(route('ventas.cancelar', $venta))
@@ -209,6 +225,7 @@ it('no cancela una venta que ya no esta ACTIVA', function (string $estadoNoActiv
     $this->actingAs($admin)
         ->post(route('ventas.cancelar.store', $venta), [
             'motivo' => 'Intento de cancelar despues de operaciones previas.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasErrors('motivo');
 
@@ -222,6 +239,7 @@ it('no cancela una venta que ya no esta ACTIVA', function (string $estadoNoActiv
 it('no cancela una venta con una devolucion previa', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     $this->actingAs($admin)->post(route('ventas.devolver.store', $venta), [
         'detalles' => [$venta->detalles()->first()->id],
@@ -234,6 +252,7 @@ it('no cancela una venta con una devolucion previa', function () {
     $this->actingAs($admin)
         ->post(route('ventas.cancelar.store', $venta), [
             'motivo' => 'Intentar cancelar tras una devolucion previa.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasErrors('motivo');
 
@@ -244,6 +263,7 @@ it('no cancela una venta con una devolucion previa', function () {
 it('aborta la cancelacion si un item ya no esta VENDIDO', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     // Uno de los items cambió entre la lectura y el proceso (se da de baja).
     $venta->detalles()->first()->item->update(['estado' => 'BAJA']);
@@ -251,6 +271,7 @@ it('aborta la cancelacion si un item ya no esta VENDIDO', function () {
     $this->actingAs($admin)
         ->post(route('ventas.cancelar.store', $venta), [
             'motivo' => 'La reversa total no debe continuar.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasErrors('motivo');
 
@@ -262,6 +283,7 @@ it('aborta la cancelacion si un item ya no esta VENDIDO', function () {
 it('aborta la cancelacion si el total no coincide con la suma de los detalles', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     // Total manipulado a nivel BD: la reversa derivada server-side ya no cuadra.
     DB::table('ventas')->where('id', $venta->id)->update(['total' => 1.00]);
@@ -269,6 +291,7 @@ it('aborta la cancelacion si el total no coincide con la suma de los detalles', 
     $this->actingAs($admin)
         ->post(route('ventas.cancelar.store', $venta), [
             'motivo' => 'El importe revertido no coincide con los detalles.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertSessionHasErrors('motivo');
 
@@ -282,6 +305,7 @@ it('aborta la cancelacion si el total no coincide con la suma de los detalles', 
 it('hace rollback completo cuando falla la creacion del Movimiento en la cancelacion', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([123.45]);
+    openCajaFor($admin);
 
     Movimiento::creating(function () {
         throw new RuntimeException('fallo simulado en el movimiento de cancelacion');
@@ -290,6 +314,7 @@ it('hace rollback completo cuando falla la creacion del Movimiento en la cancela
     $this->actingAs($admin)
         ->post(route('ventas.cancelar.store', $venta), [
             'motivo' => 'Reversa total que debe revertirse en su totalidad.',
+            'forma_reembolso' => 'EFECTIVO',
         ])
         ->assertStatus(500);
 
@@ -316,6 +341,7 @@ it('registra una devolucion parcial e ingresa el item a DEVUELTO', function () {
         'detalles' => [$detalleA->id],
         'motivo' => 'Equipo presenta falla funcional.',
         'forma_reembolso' => 'TARJETA',
+        'referencia_reembolso' => 'DEV-TARJETA-TEST',
     ])->assertRedirect();
 
     $doc = DocumentoPostventa::where('venta_id', $venta->id)->first();
@@ -350,6 +376,7 @@ it('registra una devolucion total y deja la venta en DEVUELTA', function () {
         'detalles' => $ids,
         'motivo' => 'Cliente devolvio todos los equipos.',
         'forma_reembolso' => 'TRANSFERENCIA',
+        'referencia_reembolso' => 'DEV-TRANSFER-TEST',
     ])->assertRedirect();
 
     $doc = DocumentoPostventa::first();
@@ -366,6 +393,7 @@ it('registra una devolucion total y deja la venta en DEVUELTA', function () {
 it('no permite devolver un detalle ya devuelto en otro documento', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     $detalle = $venta->detalles()->first();
 
@@ -392,6 +420,7 @@ it('rechaza devolver detalles que no pertenecen a la venta', function () {
     $venta = ventaVendida([100.0]);
     $otra = ventaVendida([50.0]);
     $detalleAjeno = $otra->detalles()->first();
+    openCajaFor($admin);
 
     $this->actingAs($admin)
         ->post(route('ventas.devolver.store', $venta), [
@@ -451,6 +480,7 @@ it('valida forma de reembolso y seleccion de equipos', function () {
 it('aborta la devolucion si el item ya no esta VENDIDO', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     $detalleA = $venta->detalles()->orderBy('id')->first();
     $detalleA->item->update(['estado' => 'BAJA']);
@@ -513,9 +543,11 @@ it('la BD impide por UNIQUE devolver dos veces el mismo detalle', function () {
 it('una vez cancelada la venta no admite devoluciones', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     $this->actingAs($admin)->post(route('ventas.cancelar.store', $venta), [
         'motivo' => 'Reversa total por error del cliente.',
+        'forma_reembolso' => 'EFECTIVO',
     ])->assertRedirect();
 
     $ids = $venta->detalles()->orderBy('id')->pluck('id')->all();
@@ -686,6 +718,7 @@ it('el formulario de cancelacion muestra los items, importes y motivo', function
 it('el formulario de devolucion muestra solo detalles no devueltos', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0, 250.5]);
+    openCajaFor($admin);
 
     [$detalleDevuelto, $detalleRestante] = $venta->detalles()->orderBy('id')->get();
 
@@ -705,6 +738,7 @@ it('el formulario de devolucion muestra solo detalles no devueltos', function ()
 it('el detalle y el comprobante imprimible de un documento postventa responden', function () {
     $admin = postventaAdmin();
     $venta = ventaVendida([100.0]);
+    openCajaFor($admin);
 
     $this->actingAs($admin)->post(route('ventas.devolver.store', $venta), [
         'detalles' => [$venta->detalles()->first()->id],
@@ -783,6 +817,7 @@ it('no elimina al usuario actor de un documento postventa y el documento persist
     $actor->givePermissionTo('ventas.devolver', 'ventas.ver');
 
     $venta = ventaVendida([100.0]);
+    openCajaFor($actor);
 
     $this->actingAs($actor)->post(route('ventas.devolver.store', $venta), [
         'detalles' => [$venta->detalles()->first()->id],
@@ -807,4 +842,249 @@ it('no elimina al usuario actor de un documento postventa y el documento persist
     $this->assertDatabaseHas('users', ['id' => $actor->id]);
     $this->assertDatabaseCount('documentos_postventa', 1);
     expect(DocumentoPostventa::find($doc->id)->user_id)->toBe($actor->id);
+});
+
+/**
+ * =========================
+ * B14.2 — REEMBOLSO POR FORMA ORIGINAL DE PAGO
+ * =========================
+ */
+it('B14.2 cancela venta mixta devolviendo exactamente por los pagos originales', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([10.00]);
+    $sesion = openCajaFor($admin);
+
+    $venta->update(['forma_pago' => 'MIXTO']);
+
+    $efectivo = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+        'monto_aplicado' => '8.00',
+        'efectivo_recibido' => '10.00',
+        'cambio_entregado' => '2.00',
+        'referencia' => null,
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '2.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-ORIGINAL',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 2,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->post(route('ventas.cancelar.store', $venta), [
+            'motivo' => 'Cancelación total de prueba mixta.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-TARJ-0001',
+            ],
+        ]);
+
+    $response->assertSessionHasNoErrors();
+
+    $documento = \App\Models\DocumentoPostventa::latest('id')->firstOrFail();
+
+    expect($documento->forma_reembolso)->toBeNull();
+
+    $reembolsos = \App\Models\ReembolsoPostventa::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->orderBy('orden')
+        ->get();
+
+    expect($reembolsos)->toHaveCount(2);
+
+    expect($reembolsos[0]->pago_venta_id)->toBe($efectivo->id);
+    expect($reembolsos[0]->metodo)->toBe('EFECTIVO');
+    expect($reembolsos[0]->monto)->toBe('8.00');
+
+    expect($reembolsos[1]->pago_venta_id)->toBe($tarjeta->id);
+    expect($reembolsos[1]->metodo)->toBe('TARJETA');
+    expect($reembolsos[1]->monto)->toBe('2.00');
+    expect($reembolsos[1]->referencia)->toBe('DEV-TARJ-0001');
+
+    $movimientoCaja = \App\Models\MovimientoCaja::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->where('tipo', \App\Models\MovimientoCaja::TIPO_REEMBOLSO_EFECTIVO)
+        ->first();
+
+    expect($movimientoCaja)->not->toBeNull();
+    expect($movimientoCaja->monto)->toBe('8.00');
+    expect($movimientoCaja->pago_venta_id)->toBe($efectivo->id);
+});
+
+it('B14.2 prorratea una devolucion parcial 80 20 y conserva trazabilidad', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([4.00, 6.00]);
+    $sesion = openCajaFor($admin);
+
+    $venta->update(['forma_pago' => 'MIXTO']);
+
+    $efectivo = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+        'monto_aplicado' => '8.00',
+        'efectivo_recibido' => '8.00',
+        'cambio_entregado' => '0.00',
+        'referencia' => null,
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '2.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-TARJETA',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 2,
+    ]);
+
+    $detalle = $venta->detalles()->orderBy('id')->firstOrFail();
+
+    $this->actingAs($admin)
+        ->post(route('ventas.devolver.store', $venta), [
+            'detalles' => [$detalle->id],
+            'motivo' => 'Devolución parcial B14.2.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-TARJ-PARCIAL-1',
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $documento = \App\Models\DocumentoPostventa::latest('id')->firstOrFail();
+
+    $reembolsos = \App\Models\ReembolsoPostventa::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->orderBy('orden')
+        ->get()
+        ->keyBy('pago_venta_id');
+
+    expect($reembolsos[$efectivo->id]->monto)->toBe('3.20');
+    expect($reembolsos[$tarjeta->id]->monto)->toBe('0.80');
+
+    $movimientoCaja = \App\Models\MovimientoCaja::query()
+        ->where('documento_postventa_id', $documento->id)
+        ->where('tipo', \App\Models\MovimientoCaja::TIPO_REEMBOLSO_EFECTIVO)
+        ->firstOrFail();
+
+    expect($movimientoCaja->monto)->toBe('3.20');
+});
+
+it('B14.2 varias devoluciones terminan exactamente en la composicion original', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([4.00, 6.00]);
+    $sesion = openCajaFor($admin);
+
+    $venta->update(['forma_pago' => 'MIXTO']);
+
+    $efectivo = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_EFECTIVO,
+        'monto_aplicado' => '8.00',
+        'efectivo_recibido' => '8.00',
+        'cambio_entregado' => '0.00',
+        'referencia' => null,
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => $sesion->id,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '2.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-TARJETA',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 2,
+    ]);
+
+    $detalles = $venta->detalles()->orderBy('id')->get();
+
+    $this->actingAs($admin)
+        ->post(route('ventas.devolver.store', $venta), [
+            'detalles' => [$detalles[0]->id],
+            'motivo' => 'Primera devolución B14.2.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-PARCIAL-A',
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($admin)
+        ->post(route('ventas.devolver.store', $venta->fresh()), [
+            'detalles' => [$detalles[1]->id],
+            'motivo' => 'Segunda devolución B14.2.',
+            'referencias_reembolso' => [
+                $tarjeta->id => 'DEV-PARCIAL-B',
+            ],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $totalEfectivo = \App\Models\ReembolsoPostventa::query()
+        ->where('pago_venta_id', $efectivo->id)
+        ->get()
+        ->sum(fn ($r) => \App\Support\Money::aCentavos($r->monto));
+
+    $totalTarjeta = \App\Models\ReembolsoPostventa::query()
+        ->where('pago_venta_id', $tarjeta->id)
+        ->get()
+        ->sum(fn ($r) => \App\Support\Money::aCentavos($r->monto));
+
+    expect($totalEfectivo)->toBe(800);
+    expect($totalTarjeta)->toBe(200);
+    expect($totalEfectivo + $totalTarjeta)->toBe(1000);
+});
+
+it('B14.2 exige referencia para revertir tarjeta', function () {
+    $admin = postventaAdmin();
+    $venta = ventaVendida([10.00]);
+
+    $tarjeta = \App\Models\PagoVenta::create([
+        'venta_id' => $venta->id,
+        'sesion_caja_id' => null,
+        'user_id' => $admin->id,
+        'metodo' => \App\Models\PagoVenta::METODO_TARJETA,
+        'monto_aplicado' => '10.00',
+        'efectivo_recibido' => null,
+        'cambio_entregado' => null,
+        'referencia' => 'COBRO-TARJETA',
+        'origen' => \App\Models\PagoVenta::ORIGEN_POS,
+        'orden' => 1,
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('ventas.cancelar.store', $venta), [
+            'motivo' => 'Cancelación electrónica sin referencia.',
+        ])
+        ->assertSessionHasErrors('reembolso');
+
+    expect(
+        \App\Models\ReembolsoPostventa::where(
+            'pago_venta_id',
+            $tarjeta->id
+        )->exists()
+    )->toBeFalse();
+
+    expect($venta->fresh()->estado)->toBe(\App\Models\Venta::ESTADO_ACTIVA);
 });

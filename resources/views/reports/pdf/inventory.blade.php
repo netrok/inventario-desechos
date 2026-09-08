@@ -90,7 +90,7 @@
     };
 @endphp
 
-    <h1 class="title">Reporte de Inventario</h1>
+    <h1 class="title">Reporte de Inventario Operativo</h1>
     <p class="meta">
         Generado: {{ optional($generatedAt)->format('Y-m-d H:i') }}
         &nbsp;•&nbsp;
@@ -125,6 +125,7 @@
                 <th style="width:70px;">Estado</th>
                 <th>Ubicación</th>
                 <th style="width:70px;">Fecha de alta</th>
+                <th style="width:80px;">Precio de venta</th>
                 <th>Notas</th>
             </tr>
         </thead>
@@ -140,6 +141,13 @@
                 <td><span class="badge {{ $badgeClass($it->estado) }}">{{ $it->estado }}</span></td>
                 <td>{{ $it->ubicacion?->nombre ?? '—' }}</td>
                 <td>{{ optional($it->created_at)->format('Y-m-d') ?: '—' }}</td>
+                <td>
+                    @if($it->precio === null)
+                        —
+                    @else
+                        ${{ \App\Support\Money::formatear(\App\Support\Money::aPrecio(\App\Support\Money::aCentavos($it->precio))) }}
+                    @endif
+                </td>
                 <td>{{ $it->notas ?: '—' }}</td>
             </tr>
         @endforeach

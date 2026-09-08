@@ -39,10 +39,12 @@ function checkout(array $extra = []): \Illuminate\Testing\TestResponse
 
     test()->session(['pos.cart' => [$item->id]]);
 
-    $venta = test()->actingAs(posUser())->post(route('pos.checkout'), array_merge([
+    $user = posUser();
+    openCajaFor($user);
+
+    $venta = test()->actingAs($user)->post(route('pos.checkout'), array_merge([
         'items' => [$item->id],
-        'forma_pago' => 'EFECTIVO',
-    ], $extra));
+    ], pagosEfectivo(100.0), $extra));
 
     return $venta;
 }
@@ -56,8 +58,13 @@ it('rechaza un cliente inexistente', function () {
     $item = posItem2();
     $this->session(['pos.cart' => [$item->id], 'pos.cliente_id' => 9999]);
 
-    $this->actingAs(posUser())
-        ->post(route('pos.checkout'), ['items' => [$item->id], 'forma_pago' => 'EFECTIVO'])
+    $user = posUser();
+    openCajaFor($user);
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), array_merge([
+            'items' => [$item->id],
+        ], pagosEfectivo(100.0)))
         ->assertSessionHasErrors('cliente_id');
 
     $this->assertDatabaseCount('ventas', 0);
@@ -70,8 +77,13 @@ it('rechaza un cliente inactivo (aunque esté en sesión)', function () {
     $item = posItem2();
     $this->session(['pos.cart' => [$item->id], 'pos.cliente_id' => $cliente->id]);
 
-    $this->actingAs(posUser())
-        ->post(route('pos.checkout'), ['items' => [$item->id], 'forma_pago' => 'EFECTIVO'])
+    $user = posUser();
+    openCajaFor($user);
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), array_merge([
+            'items' => [$item->id],
+        ], pagosEfectivo(100.0)))
         ->assertSessionHasErrors('cliente_id');
 
     $this->assertDatabaseCount('ventas', 0);
@@ -88,8 +100,13 @@ it('guarda el snapshot del cliente al momento de la venta', function () {
     $item = posItem2();
     $this->session(['pos.cart' => [$item->id], 'pos.cliente_id' => $cliente->id]);
 
-    $this->actingAs(posUser())
-        ->post(route('pos.checkout'), ['items' => [$item->id], 'forma_pago' => 'EFECTIVO']);
+    $user = posUser();
+    openCajaFor($user);
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), array_merge([
+            'items' => [$item->id],
+        ], pagosEfectivo(100.0)));
 
     $this->assertDatabaseCount('ventas', 1);
 
@@ -107,8 +124,13 @@ it('el checkout limpia el carrito y la selección de cliente', function () {
     $item = posItem2();
     $this->session(['pos.cart' => [$item->id], 'pos.cliente_id' => $cliente->id]);
 
-    $this->actingAs(posUser())
-        ->post(route('pos.checkout'), ['items' => [$item->id], 'forma_pago' => 'EFECTIVO'])
+    $user = posUser();
+    openCajaFor($user);
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), array_merge([
+            'items' => [$item->id],
+        ], pagosEfectivo(100.0)))
         ->assertRedirect();
 
     expect(session('pos.cart'))->toBe([]);

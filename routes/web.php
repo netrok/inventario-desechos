@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConfiguracionController;
+use App\Http\Controllers\CuentaPorCobrarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\PosController;
@@ -269,6 +271,111 @@ Route::middleware(['auth'])->group(function () {
 
     /**
      * =========================
+     * Cuentas por cobrar (B15.4): cobranza y abonos
+     * =========================
+     */
+    // El servidor resuelve la sesión de caja del usuario autenticado; el
+    // navegador NUNCA envía sesion_caja_id.
+    Route::get('cxc', [CuentaPorCobrarController::class, 'index'])
+        ->name('cxc.index')
+        ->middleware('permission:cxc.ver');
+
+    Route::get('cxc/{cuenta}', [CuentaPorCobrarController::class, 'show'])
+        ->name('cxc.show')
+        ->middleware('permission:cxc.ver');
+
+    Route::post('cxc/{cuenta}/abonos', [CuentaPorCobrarController::class, 'storeAbono'])
+        ->name('cxc.abonos.store')
+        ->middleware('permission:cxc.abonar');
+
+    Route::post('cxc/{cuenta}/movimientos/{movimiento}/reversar', [CuentaPorCobrarController::class, 'reversarAbono'])
+        ->name('cxc.abonos.reversar')
+        ->middleware('permission:cxc.reversar_abono');
+
+    /**
+     * =========================
+     * Caja (B14): sesiones, movimientos, arqueo y corte
+     * =========================
+     */
+    Route::get('cajas', [CajaController::class, 'index'])
+        ->name('cajas.index')
+        ->middleware('permission:cajas.ver');
+
+    /**
+     * Gestión administrativa del MAESTRO de cajas (B14.3, cajas.configurar).
+     * Separada de sesiones/cortes. Sin DELETE: la baja es activa=false para
+     * conservar el historial de sesiones de la caja.
+     */
+    Route::get('cajas/gestion', [CajaController::class, 'gestion'])
+        ->name('cajas.gestion')
+        ->middleware('permission:cajas.configurar');
+
+    Route::get('cajas/gestion/crear', [CajaController::class, 'crearForm'])
+        ->name('cajas.gestion.crear')
+        ->middleware('permission:cajas.configurar');
+
+    Route::post('cajas/gestion', [CajaController::class, 'store'])
+        ->name('cajas.gestion.store')
+        ->middleware('permission:cajas.configurar');
+
+    Route::get('cajas/gestion/{caja}/editar', [CajaController::class, 'editarForm'])
+        ->name('cajas.gestion.editar')
+        ->middleware('permission:cajas.configurar');
+
+    Route::put('cajas/gestion/{caja}', [CajaController::class, 'update'])
+        ->name('cajas.gestion.update')
+        ->middleware('permission:cajas.configurar');
+
+    Route::get('cajas/abrir', [CajaController::class, 'abrir'])
+        ->name('cajas.abrir')
+        ->middleware('permission:cajas.abrir');
+
+    Route::post('cajas/abrir', [CajaController::class, 'abrirSesion'])
+        ->name('cajas.abrir.store')
+        ->middleware('permission:cajas.abrir');
+
+    Route::get('cajas/sesiones/{sesion}', [CajaController::class, 'movimientos'])
+        ->name('cajas.movimientos')
+        ->middleware('permission:cajas.movimientos');
+
+    Route::post('cajas/sesiones/{sesion}/ajuste', [CajaController::class, 'ajuste'])
+        ->name('cajas.ajuste')
+        ->middleware('permission:cajas.ajustar');
+
+    Route::post('cajas/sesiones/{sesion}/entrada', [CajaController::class, 'entrada'])
+        ->name('cajas.entrada')
+        ->middleware('permission:cajas.entrada');
+
+    Route::post('cajas/sesiones/{sesion}/retiro', [CajaController::class, 'retiro'])
+        ->name('cajas.retiro')
+        ->middleware('permission:cajas.retiro');
+
+    Route::get('cajas/sesiones/{sesion}/corte', [CajaController::class, 'corte'])
+        ->name('cajas.corte')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/sesiones/{sesion}/imprimir', [CajaController::class, 'corteImprimir'])
+        ->name('cajas.corte.imprimir')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/sesiones/{sesion}/pdf', [CajaController::class, 'cortePdf'])
+        ->name('cajas.corte.pdf')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/sesiones/{sesion}/xlsx', [CajaController::class, 'corteXlsx'])
+        ->name('cajas.corte.xlsx')
+        ->middleware('permission:cajas.ver');
+
+    Route::get('cajas/sesiones/{sesion}/cerrar', [CajaController::class, 'cerrar'])
+        ->name('cajas.cerrar')
+        ->middleware('permission:cajas.cerrar');
+
+    Route::post('cajas/sesiones/{sesion}/cerrar', [CajaController::class, 'cerrarSesion'])
+        ->name('cajas.cerrar.store')
+        ->middleware('permission:cajas.cerrar');
+
+    /**
+     * =========================
      * Reportes operativos
      * =========================
      */
@@ -286,6 +393,18 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('reports/inventory.pdf', [ReportController::class, 'inventoryPdf'])
         ->name('reports.inventory.pdf')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory-valued', [ReportController::class, 'inventoryValued'])
+        ->name('reports.inventory-valued')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory-valued.xlsx', [ReportController::class, 'inventoryValuedXlsx'])
+        ->name('reports.inventory-valued.xlsx')
+        ->middleware('permission:reportes.ver');
+
+    Route::get('reports/inventory-valued.pdf', [ReportController::class, 'inventoryValuedPdf'])
+        ->name('reports.inventory-valued.pdf')
         ->middleware('permission:reportes.ver');
 
     Route::get('reports/movimientos', [ReportController::class, 'movimientos'])
