@@ -76,6 +76,7 @@
     <div class="stage">
         <div class="ticket">
             <pre>
+{{ TicketTexto::separador($cols, '=') }}
 <span class="negrita">{{ TicketTexto::centrado($configuracion['empresa_nombre'] ?: config('app.name', 'Inventario ReUse'), $cols) }}</span>
 @if($configuracion['empresa_rfc'])
 <span class="tenue">{{ TicketTexto::centrado('RFC '.$configuracion['empresa_rfc'], $cols) }}</span>
@@ -88,7 +89,7 @@
 @if($configuracion['empresa_telefono'] || $configuracion['empresa_email'])
 <span class="tenue">{{ TicketTexto::centrado(collect([$configuracion['empresa_telefono'], $configuracion['empresa_email']])->filter()->implode('  -  '), $cols) }}</span>
 @endif
-
+{{ TicketTexto::separador($cols, '=') }}
 <span class="negrita">{{ TicketTexto::centrado('COMPROBANTE DE VENTA', $cols) }}</span>
 {{ TicketTexto::separador($cols) }}
 @foreach(TicketTexto::linea('Folio', $venta->folio, $cols) as $renglon)
@@ -125,7 +126,7 @@
 @endif
 {{ TicketTexto::separador($cols) }}
 @foreach($venta->detalles as $detalle)
-@foreach(TicketTexto::linea($detalle->item?->codigo ?? 'SIN EQUIPO', $preciosFormateados[$detalle->id] ?? $detalle->precio, $cols) as $renglon)
+@foreach(TicketTexto::linea($loop->iteration.') '.($detalle->item?->codigo ?? 'SIN EQUIPO'), $preciosFormateados[$detalle->id] ?? $detalle->precio, $cols) as $renglon)
 <span class="negrita">{{ $renglon }}</span>
 @endforeach
 @if($detalle->item)
@@ -142,10 +143,11 @@ if ($detalle->item->categoria?->nombre) { $desc .= ' ('.$detalle->item->categori
 @endif
 {{ TicketTexto::separador($cols, '.') }}
 @endforeach
+{{ TicketTexto::separador($cols, '=') }}
 @foreach(TicketTexto::linea('TOTAL', $totalFormateado, $cols) as $renglon)
 <span class="grande">{{ $renglon }}</span>
 @endforeach
-{{ TicketTexto::separador($cols) }}
+{{ TicketTexto::separador($cols, '=') }}
 @if($venta->pagos->isNotEmpty())
 <span class="negrita">PAGOS</span>
 @foreach($venta->pagos as $pago)
@@ -192,6 +194,7 @@ if ($detalle->item->categoria?->nombre) { $desc .= ' ('.$detalle->item->categori
 @endforeach
 @endif
 
+{{ TicketTexto::separador($cols, '=') }}
 <span class="negrita">{{ TicketTexto::centrado($venta->folio, $cols) }}</span>
 <span>{{ TicketTexto::centrado('Gracias por su compra', $cols) }}</span>
 @if($configuracion['ticket_pie'])
@@ -201,6 +204,7 @@ if ($detalle->item->categoria?->nombre) { $desc .= ' ('.$detalle->item->categori
 @endforeach
 @endforeach
 @endif
+{{ TicketTexto::separador($cols, '=') }}
 </pre>
         </div>
     </div>
