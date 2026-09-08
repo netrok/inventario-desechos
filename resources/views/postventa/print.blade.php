@@ -2,12 +2,17 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>{{ $documento->folio }} — {{ $documento->tipo }}</title>
+    <title>{{ $documento->folio }} - {{ $documento->tipo }}</title>
+    @php
+        use App\Support\TicketTexto;
+        $cols = TicketTexto::columnas($width);
+    @endphp
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, Roboto, sans-serif; background: #f3f4f6; color: #111827; }
 
-        @page { size: 80mm auto; margin: 3mm; }
+        /* Solo permite 58 o 80 (validado en el controlador): nunca CSS arbitrario. */
+        @page { size: {{ $width }}mm auto; margin: 3mm; }
 
         .no-print { background: #111827; }
         .no-print a, .no-print button {
@@ -22,43 +27,36 @@
 
         .stage { display: flex; justify-content: center; padding: 20px 8px; }
 
+        /*
+         * IMPORTANTE (bug 08-sep-2026, mismo caso que ventas.ticket): el
+         * contenido es texto monoespaciado real (rellenado con espacios
+         * ASCII por App\Support\TicketTexto), NO layout de flexbox — el
+         * driver de la impresora térmica de Ernesto aplana el HTML a texto
+         * plano e ignora el CSS de posición. No reemplazar por <div> con
+         * flexbox / justify-content.
+         *
+         * El ancho de la caja se define en "ch" (ancho real de un carácter
+         * en la fuente que el navegador use de verdad), no en mm/px fijos,
+         * para que nunca se envuelva a una segunda línea sin importar cómo
+         * se renderice "Courier New" en la máquina de cada quien.
+         */
         .ticket {
-            width: 80mm;
+            width: fit-content;
             background: #ffffff;
             border: 1px solid #d1d5db;
-            padding: 7px 9px;
-            font-size: 11px;
+            padding: {{ $width === 58 ? '5px 6px' : '7px 9px' }};
+        }
+        .ticket pre {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: {{ $width === 58 ? '10px' : '12px' }};
             line-height: 1.35;
+            width: {{ $cols }}ch;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
-
-        .ticket h1 {
-            text-align: center;
-            font-size: 13px;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            margin-bottom: 6px;
-        }
-
-        .datos { border-top: 1px dashed #9ca3af; border-bottom: 1px dashed #9ca3af; padding: 4px 0; margin-bottom: 6px; }
-        .datos-wrap { display: flex; justify-content: space-between; gap: 6px; }
-        .datos-wrap .k { font-weight: 700; }
-        .datos-wrap .v { text-align: right; }
-
-        .item { padding: 5px 0; border-bottom: 1px dotted #d1d5db; }
-        .item .top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
-        .item .codigo { font-weight: 700; }
-        .item .precio { font-weight: 700; white-space: nowrap; }
-        .item .desc { color: #374151; }
-
-        .totales { display: flex; justify-content: space-between; align-items: center; padding: 7px 0 4px; border-bottom: 1px dashed #9ca3af; }
-        .totales .label { font-weight: 700; letter-spacing: 0.5px; }
-        .totales .monto { font-size: 17px; font-weight: 800; }
-
-        .motivo { margin-top: 6px; }
-        .motivo .k { font-weight: 700; }
-
-        .pie { text-align: center; margin-top: 8px; color: #4b5563; letter-spacing: 0.3px; }
-        .pie .folio { font-weight: 700; color: #111827; }
+        .ticket .negrita { font-weight: 700; }
+        .ticket .grande { font-weight: 800; }
+        .ticket .tenue { color: #4b5563; }
 
         @media print {
             body { background: #ffffff; }
@@ -77,76 +75,93 @@
 
     <div class="stage">
         <div class="ticket">
-            <h1>{{ $documento->esCancelacion() ? 'Cancelación de venta' : 'Devolución de equipos' }}</h1>
-
-            <div class="datos">
-                <div class="datos-wrap"><span class="k">Folio</span><span class="v">{{ $documento->folio }}</span></div>
-                <div class="datos-wrap"><span class="k">Tipo</span><span class="v">{{ $documento->tipo }}</span></div>
-                <div class="datos-wrap"><span class="k">Venta</span><span class="v">{{ $documento->venta->folio }}</span></div>
-                <div class="datos-wrap"><span class="k">Fecha</span><span class="v">{{ $documento->created_at->format('Y-m-d H:i') }}</span></div>
-                <div class="datos-wrap"><span class="k">Usuario</span><span class="v">{{ $documento->user?->name ?? '—' }}</span></div>
-                @if($documento->forma_reembolso)
-                    <div class="datos-wrap"><span class="k">Reembolso</span><span class="v">{{ $documento->forma_reembolso }}</span></div>
-                @endif
-                <div class="datos-wrap"><span class="k">Estado venta</span><span class="v">{{ $documento->venta->estado }}</span></div>
-                @if($documento->venta->cliente_historico)
-                    @php $ch = $documento->venta->cliente_historico; @endphp
-                    <div class="datos-wrap"><span class="k">Cliente</span><span class="v">{{ $ch['nombre'] }} (@if($ch['rfc']){{ $ch['rfc'] }}@else{{ $ch['codigo'] }}@endif)</span></div>
-                @endif
-            </div>
-
-            @foreach($documento->detalles as $detalle)
-                <div class="item">
-                    <div class="top">
-                        <span class="codigo">{{ $detalle->item?->codigo ?? 'SIN EQUIPO' }}</span>
-                        <span class="precio">{{ number_format((float) $detalle->importe, 2) }}</span>
-                    </div>
-                    @if($detalle->item)
-                        <div class="desc">
-                            {{ collect([$detalle->item->marca, $detalle->item->modelo])->filter()->implode(' · ') ?: 'Sin descripción' }}
-                        </div>
-                    @endif
-                </div>
-            @endforeach
-
-            <div class="totales">
-                <span class="label">Total</span>
-                <span class="monto">{{ number_format((float) $documento->total, 2) }}</span>
-            </div>
-
-            @php
-                    $reembolsoMonetarioCentavos = $documento->reembolsos->sum(
-                        fn ($r) => \App\Support\Money::aCentavos((string) $r->monto)
-                    );
-                    $deudaCentavos = $documento->movimientoCxCDeuda
-                        ? (int) $documento->movimientoCxCDeuda->monto_centavos
-                        : 0;
-                @endphp
-                @if($documento->movimientoCxCDeuda || $documento->reembolsos->isNotEmpty())
-                    <div class="datos">
-                        <div class="datos-wrap"><span class="k">Deuda CxC</span><span class="v">{{ number_format($deudaCentavos / 100, 2) }}</span></div>
-                        <div class="datos-wrap"><span class="k">Reembolso</span><span class="v">{{ number_format($reembolsoMonetarioCentavos / 100, 2) }}</span></div>
-                        @foreach($documento->reembolsos as $reembolso)
-                            <div class="datos-wrap">
-                                <span class="k">
-                                    {{ $reembolso->metodo }}
-                                    {{ $reembolso->esCxC() ? '(CxC)' : ($reembolso->pagoVenta ? '(PAGO)' : '(LEGACY)') }}
-                                </span>
-                                <span class="v">{{ number_format((float) $reembolso->monto, 2) }}</span>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-
-                <div class="motivo">
-                <div class="k">Motivo</div>
-                <div>{{ $documento->motivo }}</div>
-            </div>
-
-            <div class="pie">
-                <span class="folio">{{ $documento->folio }}</span><br>
-                Inventario ReUse — postventa
-            </div>
+            <pre>
+{{ TicketTexto::separador($cols, '=') }}
+<span class="negrita">{{ TicketTexto::centrado($documento->esCancelacion() ? 'CANCELACION DE VENTA' : 'DEVOLUCION DE EQUIPOS', $cols) }}</span>
+{{ TicketTexto::separador($cols, '=') }}
+@foreach(TicketTexto::linea('Folio', $documento->folio, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Tipo', $documento->tipo, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Venta', $documento->venta->folio, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Fecha', $documento->created_at->format('Y-m-d H:i'), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Usuario', $documento->user?->name ?? '-', $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@if($documento->forma_reembolso)
+@foreach(TicketTexto::linea('Reembolso', $documento->forma_reembolso, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endif
+@foreach(TicketTexto::linea('Estado venta', $documento->venta->estado, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@if($documento->venta->cliente_historico)
+@php $ch = $documento->venta->cliente_historico; @endphp
+@foreach(TicketTexto::linea('Cliente', $ch['nombre'].' ('.($ch['rfc'] ?: $ch['codigo']).')', $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endif
+{{ TicketTexto::separador($cols) }}
+@foreach($documento->detalles as $detalle)
+@foreach(TicketTexto::linea($loop->iteration.') '.($detalle->item?->codigo ?? 'SIN EQUIPO'), number_format((float) $detalle->importe, 2), $cols) as $renglon)
+<span class="negrita">{{ $renglon }}</span>
+@endforeach
+@if($detalle->item)
+@php
+$desc = collect([$detalle->item->marca, $detalle->item->modelo])->filter()->implode(' - ') ?: 'Sin descripcion';
+@endphp
+@foreach(TicketTexto::envolver($desc, $cols) as $renglon)
+<span class="tenue">{{ $renglon }}</span>
+@endforeach
+@endif
+{{ TicketTexto::separador($cols, '.') }}
+@endforeach
+{{ TicketTexto::separador($cols, '=') }}
+@foreach(TicketTexto::linea('TOTAL', number_format((float) $documento->total, 2), $cols) as $renglon)
+<span class="grande">{{ $renglon }}</span>
+@endforeach
+{{ TicketTexto::separador($cols, '=') }}
+@php
+$reembolsoMonetarioCentavos = $documento->reembolsos->sum(
+    fn ($r) => \App\Support\Money::aCentavos((string) $r->monto)
+);
+$deudaCentavos = $documento->movimientoCxCDeuda
+    ? (int) $documento->movimientoCxCDeuda->monto_centavos
+    : 0;
+@endphp
+@if($documento->movimientoCxCDeuda || $documento->reembolsos->isNotEmpty())
+@foreach(TicketTexto::linea('Deuda CxC', number_format($deudaCentavos / 100, 2), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach(TicketTexto::linea('Reembolso', number_format($reembolsoMonetarioCentavos / 100, 2), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@foreach($documento->reembolsos as $reembolso)
+@php
+$etiqueta = $reembolso->metodo.' '.($reembolso->esCxC() ? '(CxC)' : ($reembolso->pagoVenta ? '(PAGO)' : '(LEGACY)'));
+@endphp
+@foreach(TicketTexto::linea($etiqueta, number_format((float) $reembolso->monto, 2), $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+@endforeach
+{{ TicketTexto::separador($cols) }}
+@endif
+<span class="negrita">Motivo</span>
+@foreach(TicketTexto::envolver($documento->motivo, $cols) as $renglon)
+{{ $renglon }}
+@endforeach
+{{ TicketTexto::separador($cols, '=') }}
+<span class="negrita">{{ TicketTexto::centrado($documento->folio, $cols) }}</span>
+<span>{{ TicketTexto::centrado('Inventario ReUse - postventa', $cols) }}</span>
+{{ TicketTexto::separador($cols, '=') }}
+</pre>
         </div>
     </div>
 </body>

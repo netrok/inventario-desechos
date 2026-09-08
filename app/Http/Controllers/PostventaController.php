@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Configuracion;
 use App\Models\DocumentoPostventa;
 use App\Models\PagoVenta;
 use App\Models\Venta;
@@ -397,7 +398,7 @@ class PostventaController extends Controller
         ]);
     }
 
-    public function print(DocumentoPostventa $documento)
+    public function print(DocumentoPostventa $documento, Request $request)
     {
         $documento->load([
             'user',
@@ -411,8 +412,17 @@ class PostventaController extends Controller
             'movimientoCxCDeuda',
         ]);
 
+        // Mismo mecanismo que el ticket de venta (ventas.ticket): el ancho
+        // por defecto viene de Configuración y se puede forzar manualmente
+        // con ?width=58|80 (validado estrictamente contra los únicos dos
+        // anchos soportados). Nunca se interpola directamente en CSS.
+        $defaultWidth = Configuracion::ticketAncho();
+        $requested = $request->integer('width', $defaultWidth);
+        $width = in_array($requested, Configuracion::ANCHOS_VALIDOS, true) ? $requested : $defaultWidth;
+
         return view('postventa.print', [
             'documento' => $documento,
+            'width' => $width,
         ]);
     }
 }
