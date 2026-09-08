@@ -177,6 +177,89 @@ it('no hay endpoint de borrado físico para clientes', function () {
     expect($routes->has('clientes.delete'))->toBeFalse();
 });
 
+it('no permite dos clientes con el mismo RFC', function () {
+    $user = clienteUser(['clientes.ver', 'clientes.crear']);
+    Cliente::create(['nombre' => 'Existente', 'tipo' => 'PERSONA', 'rfc' => 'AAAA010101AAA']);
+
+    $this->actingAs($user)
+        ->post(route('clientes.store'), [
+            'tipo' => 'PERSONA',
+            'nombre' => 'Nuevo',
+            'rfc' => 'aaaa010101aaa', // mismo RFC, distinta capitalización
+        ])
+        ->assertSessionHasErrors(['rfc']);
+
+    $this->assertDatabaseCount('clientes', 1);
+});
+
+it('no permite dos clientes con el mismo email', function () {
+    $user = clienteUser(['clientes.ver', 'clientes.crear']);
+    Cliente::create(['nombre' => 'Existente', 'tipo' => 'PERSONA', 'email' => 'ana@example.com']);
+
+    $this->actingAs($user)
+        ->post(route('clientes.store'), [
+            'tipo' => 'PERSONA',
+            'nombre' => 'Nuevo',
+            'email' => 'ANA@EXAMPLE.COM', // mismo email, distinta capitalización
+        ])
+        ->assertSessionHasErrors(['email']);
+
+    $this->assertDatabaseCount('clientes', 1);
+});
+
+it('permite repetir el RFC generico de publico en general', function () {
+    $user = clienteUser(['clientes.ver', 'clientes.crear']);
+    Cliente::create(['nombre' => 'Mostrador 1', 'tipo' => 'PERSONA', 'rfc' => 'XAXX010101000']);
+
+    $this->actingAs($user)
+        ->post(route('clientes.store'), [
+            'tipo' => 'PERSONA',
+            'nombre' => 'Mostrador 2',
+            'rfc' => 'xaxx010101000',
+        ])
+        ->assertSessionDoesntHaveErrors('rfc')
+        ->assertRedirect(route('clientes.index'));
+
+    $this->assertDatabaseCount('clientes', 2);
+});
+
+it('permite editar un cliente conservando su propio RFC y email', function () {
+    $user = clienteUser(['clientes.ver', 'clientes.editar']);
+    $cliente = Cliente::create([
+        'nombre' => 'Ana', 'tipo' => 'PERSONA',
+        'rfc' => 'AAAA010101AAA', 'email' => 'ana@example.com',
+    ]);
+
+    $this->actingAs($user)
+        ->put(route('clientes.update', $cliente), [
+            'tipo' => 'PERSONA',
+            'nombre' => 'Ana Actualizada',
+            'rfc' => 'AAAA010101AAA',
+            'email' => 'ana@example.com',
+        ])
+        ->assertSessionDoesntHaveErrors(['rfc', 'email'])
+        ->assertRedirect(route('clientes.show', $cliente));
+
+    expect($cliente->refresh()->nombre)->toBe('Ana Actualizada');
+});
+
+it('no permite editar un cliente para tomar el RFC o email de otro', function () {
+    $user = clienteUser(['clientes.ver', 'clientes.editar']);
+    Cliente::create(['nombre' => 'Ana', 'tipo' => 'PERSONA', 'rfc' => 'AAAA010101AAA', 'email' => 'ana@example.com']);
+    $otro = Cliente::create(['nombre' => 'Beto', 'tipo' => 'PERSONA', 'rfc' => 'BBBB010101BBB', 'email' => 'beto@example.com']);
+
+    $this->actingAs($user)
+        ->put(route('clientes.update', $otro), [
+            'tipo' => 'PERSONA',
+            'nombre' => 'Beto',
+            'rfc' => 'AAAA010101AAA',
+            'email' => 'ana@example.com',
+        ])
+        ->assertSessionHasErrors(['rfc', 'email']);
+
+    expect($otro->refresh()->rfc)->toBe('BBBB010101BBB');
+});
+
 it('editar un cliente no altera los snapshots de sus ventas', function () {
     $user = clienteUser(['clientes.ver', 'clientes.editar', 'clientes.desactivar']);
     $cliente = Cliente::create(['nombre' => 'Nombre Original', 'tipo' => 'PERSONA', 'rfc' => 'RFCOLD']);

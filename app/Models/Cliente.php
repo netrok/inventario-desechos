@@ -21,6 +21,17 @@ class Cliente extends Model
         self::TIPO_EMPRESA,
     ];
 
+    /**
+     * RFC genérico del SAT para "público en general" (persona física y
+     * persona moral). Se permite que varios clientes lo compartan a
+     * propósito: no son duplicados reales, son ventas de mostrador sin
+     * datos fiscales de un cliente específico. Ver docs/CLIENTES.md.
+     */
+    public const RFC_GENERICOS = [
+        'XAXX010101000',
+        'XEXX010101000',
+    ];
+
     protected $fillable = [
         // 'codigo' se genera SIEMPRE por la sequence PostgreSQL dentro del
         // evento creating. NO se incluye en $fillable para que el cliente nunca

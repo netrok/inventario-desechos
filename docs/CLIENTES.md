@@ -11,6 +11,17 @@ Catálogo de personas y empresas vinculadas a las ventas del Mini POS.
   `direccion`, `notas` y `activo` (booleano).
 - Datos sensibles (`rfc`, `email`, `telefono`) se **normalizan** al guardar
   (trim + `rfc` mayúsculas, `email` minúsculas).
+- **`rfc` y `email` son únicos** entre clientes cuando vienen capturados
+  (vacío no cuenta, y dos clientes sin RFC/email nunca chocan entre sí).
+  **Excepción intencional:** el RFC genérico de "público en general" del SAT
+  (`XAXX010101000` persona física, `XEXX010101000` persona moral,
+  `Cliente::RFC_GENERICOS`) sí puede repetirse en cuantos clientes haga
+  falta — no identifica a una persona real, así que no cuenta como
+  duplicado. La regla se aplica en dos capas: validación en
+  `ClienteController::normalizar()` (mensaje amigable al usuario) y un
+  índice único parcial en Postgres (`clientes_rfc_unique`,
+  `clientes_email_unique`) como red de seguridad si algún día se inserta
+  un registro sin pasar por el controlador.
 - Ciclo de vida **ACTIVO / INACTIVO**: no hay borrado físico ni endpoint de
   `destroy`. Un cliente inactivo no puede seleccionarse para nuevas ventas,
   pero sus ventas históricas se conservan íntegras.

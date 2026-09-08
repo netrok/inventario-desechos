@@ -10,24 +10,54 @@ class ClienteController extends Controller
 {
     /**
      * Normaliza campos servidor-side: trim, RFC en mayúsculas, email en minúsculas.
+     *
+     * $cliente se pasa en edición para que la validación de unicidad de
+     * rfc/email ignore el propio registro (si no, un cliente "chocaría"
+     * consigo mismo al guardar sin cambiar esos campos).
+     *
+     * Política de duplicados (hallazgo #2 de la auditoría 2026-09-07,
+     * confirmada con el equipo): rfc y email deben ser únicos entre
+     * clientes cuando vienen capturados, EXCEPTO el RFC genérico de
+     * "público en general" del SAT (Cliente::RFC_GENERICOS), que sí puede
+     * repetirse porque no identifica a un cliente real.
      */
-    private function normalizar(Request $request): array
+    private function normalizar(Request $request, ?Cliente $cliente = null): array
     {
+        // Se normaliza ANTES de validar: la regla `unique` compara contra
+        // lo que ya está guardado (rfc en mayúsculas, email en minúsculas),
+        // así que si no igualamos capitalización aquí, "aa@x.com" y
+        // "AA@X.COM" no se detectarían como el mismo email.
+        $request->merge([
+            'rfc' => $request->filled('rfc') ? mb_strtoupper(trim($request->input('rfc'))) : null,
+            'email' => $request->filled('email') ? mb_strtolower(trim($request->input('email'))) : null,
+        ]);
+
+        $esRfcGenerico = in_array($request->input('rfc'), Cliente::RFC_GENERICOS, true);
+
         $data = $request->validate([
             'tipo' => ['required', Rule::in(Cliente::TIPOS)],
             'nombre' => ['required', 'string', 'max:255'],
-            'rfc' => ['nullable', 'string', 'max:20'],
+            'rfc' => array_filter([
+                'nullable',
+                'string',
+                'max:20',
+                $esRfcGenerico ? null : Rule::unique('clientes', 'rfc')->ignore($cliente?->id),
+            ]),
             'telefono' => ['nullable', 'string', 'max:30'],
-            'email' => ['nullable', 'email', 'max:255'],
+            'email' => [
+                'nullable', 'email', 'max:255',
+                Rule::unique('clientes', 'email')->ignore($cliente?->id),
+            ],
             'direccion' => ['nullable', 'string', 'max:2000'],
             'notas' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'rfc.unique' => 'Ya existe un cliente registrado con ese RFC.',
+            'email.unique' => 'Ya existe un cliente registrado con ese email.',
         ]);
 
         $data['nombre'] = trim($data['nombre']);
 
         // Campos ausentes se tratan como null (formularios independientes del catálogo).
-        $data['rfc'] = $request->filled('rfc') ? mb_strtoupper(trim($request->input('rfc'))) : null;
-        $data['email'] = $request->filled('email') ? mb_strtolower(trim($request->input('email'))) : null;
         $data['telefono'] = $request->filled('telefono') ? trim($request->input('telefono')) : null;
         $data['direccion'] = $request->filled('direccion') ? trim($request->input('direccion')) : null;
         $data['notas'] = $request->filled('notas') ? trim($request->input('notas')) : null;
@@ -104,7 +134,7 @@ class ClienteController extends Controller
 
     public function update(Request $request, Cliente $cliente)
     {
-        $cliente->update($this->normalizar($request));
+        $cliente->update($this->normalizar($request, $cliente));
 
         return redirect()
             ->route('clientes.show', $cliente)
