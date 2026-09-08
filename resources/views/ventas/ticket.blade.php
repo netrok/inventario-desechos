@@ -37,8 +37,20 @@
          * cualquiera de los dos casos (impresión con CSS o texto plano).
          * No reemplazar estas líneas por <div> con flexbox / justify-content.
          */
+        /*
+         * El ancho de la caja se define en "ch" (ancho real de un carácter
+         * en la fuente que el navegador esté usando de verdad), NO en mm ni
+         * en px calculados a mano. Así, si en la máquina de Ernesto "Courier
+         * New" se renderiza un poco más ancha o más angosta que en el
+         * entorno donde se probó esto, la caja se ajusta sola y el texto
+         * (que ya viene relleno a $cols caracteres exactos) nunca se
+         * envuelve a una segunda línea. Bug 08-sep-2026: antes el ancho
+         * estaba fijo en milímetros y el tamaño de letra se adivinaba en
+         * píxeles, y con la fuente real de Windows los renglones (fecha,
+         * cliente, separadores) se cortaban a la mitad.
+         */
         .ticket {
-            width: {{ $width }}mm;
+            width: fit-content;
             background: #ffffff;
             border: 1px solid #d1d5db;
             padding: {{ $width === 58 ? '5px 6px' : '7px 9px' }};
@@ -47,11 +59,12 @@
             font-family: 'Courier New', Courier, monospace;
             font-size: {{ $width === 58 ? '10px' : '12px' }};
             line-height: 1.35;
+            width: {{ $cols }}ch;
             white-space: pre-wrap;
             word-break: break-word;
         }
         .ticket .negrita { font-weight: 700; }
-        .ticket .grande { font-size: {{ $width === 58 ? '13px' : '16px' }}; font-weight: 800; }
+        .ticket .grande { font-weight: 800; }
         .ticket .tenue { color: #4b5563; }
         .ticket .cambio { color: #b45309; }
 
@@ -87,7 +100,7 @@
 @endforeach
 @endif
 @if($configuracion['empresa_telefono'] || $configuracion['empresa_email'])
-<span class="tenue">{{ TicketTexto::centrado(collect([$configuracion['empresa_telefono'], $configuracion['empresa_email']])->filter()->implode('  -  '), $cols) }}</span>
+<span class="tenue">{{ TicketTexto::centrado(collect([$configuracion['empresa_telefono'], $configuracion['empresa_email']])->filter()->implode(' - '), $cols) }}</span>
 @endif
 {{ TicketTexto::separador($cols, '=') }}
 <span class="negrita">{{ TicketTexto::centrado('COMPROBANTE DE VENTA', $cols) }}</span>
