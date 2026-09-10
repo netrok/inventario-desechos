@@ -135,24 +135,10 @@
         };
     };
 
-    // DomPDF-friendly: base64 inline
-    $imgBase64 = function ($fotoPath) {
-        if (empty($fotoPath)) return null;
-
-        $full = public_path('storage/' . ltrim($fotoPath, '/'));
-        if (!is_file($full)) return null;
-
-        $ext = strtolower(pathinfo($full, PATHINFO_EXTENSION));
-        $mime = match ($ext) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'png' => 'image/png',
-            'webp' => 'image/webp',
-            default => null,
-        };
-        if (!$mime) return null;
-
-        return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($full));
-    };
+    // DomPDF-friendly: recorta/redimensiona a un cuadrado exacto antes de
+    // insertar como base64 (dompdf no siempre respeta el width/height por
+    // CSS si la foto original no coincide -- ver App\Support\Pdf\MiniaturaImagen).
+    $imgBase64 = fn ($fotoPath) => \App\Support\Pdf\MiniaturaImagen::paraPdf($fotoPath, 84);
 @endphp
 
     <h1 class="title">Reporte de Items</h1>
