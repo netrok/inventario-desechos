@@ -2,10 +2,12 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\ForzarValoresComoTexto;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
@@ -123,8 +125,10 @@ class InventoryValuedResumenSheet implements FromArray, ShouldAutoSize, WithTitl
     }
 }
 
-class InventoryValuedDetalleSheet implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatwebsite\Excel\Concerns\WithHeadings, \Maatwebsite\Excel\Concerns\WithMapping, ShouldAutoSize, WithTitle
+class InventoryValuedDetalleSheet implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatwebsite\Excel\Concerns\WithHeadings, \Maatwebsite\Excel\Concerns\WithMapping, ShouldAutoSize, WithTitle, WithCustomValueBinder
 {
+    use ForzarValoresComoTexto;
+
     public function __construct(private readonly Builder $query) {}
 
     public function title(): string
