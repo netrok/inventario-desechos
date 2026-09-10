@@ -67,7 +67,6 @@
 
         /* Column widths */
         .col-foto   { width: 54px; }
-        .col-id     { width: 34px; }
         .col-codigo { width: 86px; }
         .col-estado { width: 72px; }
         .col-notas  { width: 130px; }
@@ -189,7 +188,6 @@
         <thead>
             <tr>
                 <th class="col-foto">Foto</th>
-                <th class="col-id">ID</th>
                 <th class="col-codigo">Código</th>
                 <th>Serie</th>
                 <th>Marca</th>
@@ -219,7 +217,6 @@
                     </div>
                 </td>
 
-                <td class="col-id">{{ $it->id }}</td>
                 <td class="col-codigo"><strong>{{ $it->codigo }}</strong></td>
                 <td>{{ $it->serie ?: '—' }}</td>
                 <td>{{ $it->marca ?: '—' }}</td>
@@ -235,9 +232,14 @@
         </tbody>
     </table>
 
+    {{--
+        El número de página NO se pone aquí en el HTML: dompdf ya no
+        reemplaza "{PAGE_NUM}"/"{PAGE_COUNT}" en texto normal (ver
+        App\Support\Pdf\PiePaginaNumerado). Lo escribe el controller
+        directamente sobre el PDF ya renderizado, con Canvas::page_text().
+    --}}
     <div class="footer">
         <div class="footer-left">Inventario Desechos · Reporte de Items</div>
-        <div class="footer-right">Página {PAGE_NUM} de {PAGE_COUNT}</div>
     </div>
 
 </body>

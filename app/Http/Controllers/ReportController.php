@@ -11,6 +11,7 @@ use App\Models\Movimiento;
 use App\Models\Ubicacion;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\Pdf\PiePaginaNumerado;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -164,6 +165,8 @@ class ReportController extends Controller
                 'dpi' => 96,
                 'defaultFont' => 'DejaVu Sans',
             ]);
+
+        PiePaginaNumerado::escribir($pdf, margenDerechoPt: 18, margenInferiorPt: 16, tamanoFuente: 9);
 
         return $pdf->download($this->filename('reports_inventory', 'pdf'));
     }
@@ -452,6 +455,8 @@ class ReportController extends Controller
                 'defaultFont' => 'DejaVu Sans',
             ]);
 
+        PiePaginaNumerado::escribir($pdf, margenDerechoPt: 14, margenInferiorPt: 13, tamanoFuente: 8.5);
+
         return $pdf->download($this->filename('reports_inventory_valued', 'pdf'));
     }
 
@@ -569,6 +574,8 @@ class ReportController extends Controller
                 'dpi' => 96,
                 'defaultFont' => 'DejaVu Sans',
             ]);
+
+        PiePaginaNumerado::escribir($pdf, margenDerechoPt: 18, margenInferiorPt: 16, tamanoFuente: 9);
 
         return $pdf->download($this->filename('reports_movimientos', 'pdf'));
     }

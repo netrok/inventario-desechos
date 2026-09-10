@@ -11,6 +11,7 @@ use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Ubicacion;
 use App\Support\ItemCodigo;
+use App\Support\Pdf\PiePaginaNumerado;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -558,6 +559,8 @@ class ItemController extends Controller
                 'dpi' => 96,
                 'defaultFont' => 'DejaVu Sans',
             ]);
+
+        PiePaginaNumerado::escribir($pdf, margenDerechoPt: 18, margenInferiorPt: 16, tamanoFuente: 9);
 
         return $pdf->download('items_'.now()->format('Ymd_His').'.pdf');
     }
