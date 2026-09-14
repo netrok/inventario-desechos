@@ -31,19 +31,16 @@
         }
 
         .qr-side {
-            width: 26mm;
+            width: 23mm;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 1mm;
             padding: 1.5mm;
             border-right: 0.4mm dashed #374151;
         }
 
-        .qr-side svg { display: block; width: 22mm; height: 22mm; }
-
-        .qr-hint { font-size: 7px; color: #4b5563; text-align: center; letter-spacing: 0.5px; }
+        .qr-side svg { display: block; width: 20mm; height: 20mm; }
 
         .info-side {
             flex: 1;
@@ -69,7 +66,7 @@
             width: 100%;
         }
 
-        .line { font-size: 8px; color: #374151; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+        .line { font-size: 7.2px; color: #374151; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
 
         @page { size: 50mm 30mm; margin: 0; }
 
@@ -91,7 +88,6 @@
         <div id="label">
             <div class="qr-side">
                 {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(90)->margin(4)->generate($item->codigo) !!}
-                <div class="qr-hint">Escanea</div>
             </div>
 
             <div class="info-side">
