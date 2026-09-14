@@ -60,9 +60,12 @@ it('el QR codifica exactamente Item.codigo, no el id ni una URL', function () {
 
     $item = Item::create(['codigo' => 'ITM-000123', 'estado' => 'DISPONIBLE']);
 
-    $expectedQr = (string) QrCode::size(90)->generate($item->codigo);
-    $idQr = (string) QrCode::size(90)->generate((string) $item->id);
-    $urlQr = (string) QrCode::size(90)->generate(route('items.show', $item));
+    // margin(4): la vista aplica el mismo quiet zone (ver label.blade.php) para
+    // que el lector pueda escanearlo; el default del paquete es 0, sin esto el
+    // SVG comparado aqui no coincidiria con el que realmente imprime la etiqueta.
+    $expectedQr = (string) QrCode::size(90)->margin(4)->generate($item->codigo);
+    $idQr = (string) QrCode::size(90)->margin(4)->generate((string) $item->id);
+    $urlQr = (string) QrCode::size(90)->margin(4)->generate(route('items.show', $item));
 
     $this->actingAs($user)
         ->get(route('items.label', $item))

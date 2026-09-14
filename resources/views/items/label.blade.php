@@ -47,22 +47,29 @@
 
         .info-side {
             flex: 1;
+            min-width: 0; /* sin esto, un flex item nunca se encoge por debajo del
+                             ancho de su contenido: el texto largo empuja el renglon
+                             mas alla de los 50mm del label y #label (overflow:hidden)
+                             lo corta en seco en vez de que cada linea haga elipsis. */
             display: flex;
             flex-direction: column;
             justify-content: center;
-            gap: 1mm;
+            gap: 0.8mm;
             padding: 1.5mm 2mm;
         }
 
         .codigo {
-            font-size: 16px;
+            font-size: 9px;
             font-weight: 800;
-            letter-spacing: 0.5px;
+            letter-spacing: 0px;
             line-height: 1.1;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
         }
 
-        .line { font-size: 9px; color: #374151; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .line { font-size: 8px; color: #374151; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
 
         @page { size: 50mm 30mm; margin: 0; }
 
@@ -83,7 +90,7 @@
     <div class="stage">
         <div id="label">
             <div class="qr-side">
-                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(90)->generate($item->codigo) !!}
+                {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(90)->margin(4)->generate($item->codigo) !!}
                 <div class="qr-hint">Escanea</div>
             </div>
 
