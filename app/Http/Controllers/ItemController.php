@@ -216,7 +216,11 @@ class ItemController extends Controller
                 ->with('success', "Item {$item->codigo} creado correctamente.");
         }
 
-        return redirect()->route('items.index')->with('success', "Item {$item->codigo} creado.");
+        // "Guardar" normal (a diferencia de "Guardar y crear otro" arriba):
+        // manda directo a la etiqueta -- esa vista dispara la impresion sola
+        // (ver label.blade.php) para ahorrar el paso de ir a buscar el item
+        // y darle clic a "Imprimir etiqueta" a mano.
+        return redirect()->route('items.label', $item)->with('success', "Item {$item->codigo} creado.");
     }
 
     public function show(Item $item)

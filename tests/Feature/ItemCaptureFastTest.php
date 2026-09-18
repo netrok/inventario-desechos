@@ -21,7 +21,7 @@ beforeEach(function () {
     app(PermissionRegistrar::class)->forgetCachedPermissions();
 });
 
-it('Guardar crea el Item con su Movimiento ALTA y redirige al índice', function () {
+it('Guardar crea el Item con su Movimiento ALTA y redirige a la etiqueta para imprimirla', function () {
     $user = User::factory()->create();
     $user->givePermissionTo('items.crear');
 
@@ -40,7 +40,7 @@ it('Guardar crea el Item con su Movimiento ALTA y redirige al índice', function
     $item = Item::first();
 
     $response->assertSessionHasNoErrors();
-    $response->assertRedirect(route('items.index'));
+    $response->assertRedirect(route('items.label', $item));
     $response->assertSessionHas('success', "Item {$item->codigo} creado.");
 
     $this->assertDatabaseHas('movimientos', [

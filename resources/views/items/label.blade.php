@@ -106,5 +106,14 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // Esta pagina existe solo para imprimir la etiqueta -- abrir el
+        // dialogo de impresion solo cuando ya cargo todo (fuentes/QR),
+        // asi el usuario se ahorra el clic en "Imprimir".
+        window.addEventListener('load', function () {
+            window.print();
+        });
+    </script>
 </body>
 </html>
