@@ -21,60 +21,60 @@
         .stage { display: flex; justify-content: center; margin-top: 24px; }
 
         #label {
-            width: 50mm;
-            height: 30mm;
+            width: 30mm;
+            height: 22mm;
             background: #ffffff;
-            border: 0.6mm solid #000;
+            border: 0.4mm solid #000;
             display: flex;
             align-items: stretch;
             overflow: hidden;
         }
 
         .qr-side {
-            width: 23mm;
+            width: 13mm;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 1.5mm;
-            border-right: 0.4mm dashed #374151;
+            padding: 0.8mm;
+            border-right: 0.3mm dashed #374151;
         }
 
-        .qr-side svg { display: block; width: 20mm; height: 20mm; }
+        .qr-side svg { display: block; width: 11mm; height: 11mm; }
 
         .info-side {
             flex: 1;
             min-width: 0; /* sin esto, un flex item nunca se encoge por debajo del
                              ancho de su contenido: el texto largo empuja el renglon
-                             mas alla de los 50mm del label y #label (overflow:hidden)
+                             mas alla del ancho del label y #label (overflow:hidden)
                              lo corta en seco en vez de que cada linea haga elipsis. */
             display: flex;
             flex-direction: column;
             justify-content: center;
-            gap: 0.8mm;
-            padding: 1.5mm 2mm;
+            gap: 0.4mm;
+            padding: 0.8mm 1mm;
         }
 
         .codigo {
-            font-size: 9px;
+            font-size: 5.6px;
             font-weight: 800;
             letter-spacing: 0px;
-            line-height: 1.1;
+            line-height: 1.05;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             width: 100%;
         }
 
-        .line { font-size: 7.2px; color: #374151; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+        .line { font-size: 4.6px; color: #374151; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
 
-        @page { size: 50mm 30mm; margin: 0; }
+        @page { size: 30mm 22mm; margin: 0; }
 
         @media print {
             body { background: #ffffff; }
             .no-print { display: none !important; }
             .stage { margin-top: 0; }
-            #label { border-width: 0.4mm; }
+            #label { border-width: 0.3mm; }
         }
     </style>
 </head>
