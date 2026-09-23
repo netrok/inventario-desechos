@@ -78,6 +78,80 @@ it('rechaza VENDIDO por cambio manual de estado (VENDIDO solo se origina desde e
     $this->assertDatabaseCount('ventas', 0);
 });
 
+it('bloquea reactivar un Item BAJA sin permiso items.reactivar_baja, aunque tenga items.cambiar_estado', function () {
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.cambiar_estado', 'items.ver');
+
+    $item = Item::create(['estado' => 'BAJA']);
+
+    $response = $this->actingAs($user)
+        ->from(route('items.show', $item))
+        ->post(route('items.changeEstado', $item->id), [
+            'estado' => 'REPARACION',
+        ]);
+
+    $response->assertSessionHasErrors('estado');
+
+    $this->assertDatabaseHas('items', ['id' => $item->id, 'estado' => 'BAJA']);
+    $this->assertDatabaseMissing('movimientos', [
+        'item_id' => $item->id,
+        'de_estado' => 'BAJA',
+        'a_estado' => 'REPARACION',
+    ]);
+});
+
+it('permite a un Admin con items.reactivar_baja regresar un Item de BAJA a REPARACION', function () {
+    Permission::findOrCreate('items.reactivar_baja', 'web');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $role = \Spatie\Permission\Models\Role::findOrCreate('Admin', 'web');
+    $role->givePermissionTo('items.cambiar_estado', 'items.reactivar_baja');
+
+    $user = User::factory()->create();
+    $user->assignRole('Admin');
+    $user->givePermissionTo('items.ver');
+
+    $item = Item::create(['estado' => 'BAJA']);
+
+    $response = $this->actingAs($user)
+        ->from(route('items.show', $item))
+        ->post(route('items.changeEstado', $item->id), [
+            'estado' => 'REPARACION',
+            'notas' => 'Se revisó y sí es reparable',
+        ]);
+
+    $response->assertSessionHasNoErrors();
+    $response->assertRedirect(route('items.show', $item));
+
+    $this->assertDatabaseHas('items', ['id' => $item->id, 'estado' => 'REPARACION']);
+    $this->assertDatabaseHas('movimientos', [
+        'item_id' => $item->id,
+        'de_estado' => 'BAJA',
+        'a_estado' => 'REPARACION',
+    ]);
+});
+
+it('bloquea reactivar un Item BAJA desde el formulario de Editar sin items.reactivar_baja', function () {
+    Permission::findOrCreate('items.editar', 'web');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('items.cambiar_estado', 'items.editar', 'items.ver');
+
+    $categoria = Categoria::create(['nombre' => 'Equipos']);
+    $item = Item::create(['estado' => 'BAJA', 'categoria_id' => $categoria->id]);
+
+    $response = $this->actingAs($user)
+        ->from(route('items.edit', $item))
+        ->put(route('items.update', $item), [
+            'categoria_id' => $categoria->id,
+            'estado' => 'DISPONIBLE',
+        ]);
+
+    $response->assertSessionHasErrors('estado');
+    $this->assertDatabaseHas('items', ['id' => $item->id, 'estado' => 'BAJA']);
+});
+
 it('no permite dar de alta un Item directamente como VENDIDO', function () {
     $user = User::factory()->create();
     $user->givePermissionTo('items.crear');

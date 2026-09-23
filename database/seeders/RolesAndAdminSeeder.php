@@ -56,6 +56,10 @@ class RolesAndAdminSeeder extends Seeder
             'items.mover',
             'items.revisar_devolucion',
 
+            // Reactivar un artículo dado de BAJA (corregir errores de
+            // captura). Admin-only, ver App\Support\ItemsAcceso.
+            'items.reactivar_baja',
+
             // Reportes
             'reportes.ver',
 
@@ -236,6 +240,17 @@ class RolesAndAdminSeeder extends Seeder
 
         // Guard server-side B15.4: cxc.reversar_abono es Admin-only.
         \App\Support\CxCAcceso::assertRolesSeguros([
+            'Admin' => $perms,
+            'Almacen' => $almacenPermisos,
+            'Ventas' => $ventasPermisos,
+            'Auditor' => $auditorPermisos,
+            'Operador' => $operadorPermisos,
+            'Consulta' => $consultaPermisos,
+        ]);
+
+        // Guard server-side: items.reactivar_baja (reactivar un artículo dado
+        // de BAJA) es Admin-only.
+        \App\Support\ItemsAcceso::assertRolesSeguros([
             'Admin' => $perms,
             'Almacen' => $almacenPermisos,
             'Ventas' => $ventasPermisos,

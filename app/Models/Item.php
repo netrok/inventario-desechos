@@ -73,6 +73,13 @@ class Item extends Model
      * la única vía de salida es la revisión formal (RevisionDevolucionService),
      * que deriva el artículo a DISPONIBLE | REPARACION | BAJA como RESULTADO de
      * la revisión físico-administrativa de la devolución concreta.
+     *
+     * BAJA -> DISPONIBLE | REPARACION es estructuralmente válido aquí, pero
+     * NO libre: ItemController exige además App\Support\ItemsAcceso::puedeReactivarBaja()
+     * (rol Admin + permiso items.reactivar_baja) antes de aplicarlo, para
+     * corregir errores de captura sin abrir la puerta a que cualquiera
+     * reactive un desecho con el mismo permiso de items.cambiar_estado de
+     * siempre.
      */
     public static function canTransition(string $from, string $to): bool
     {
@@ -82,7 +89,7 @@ class Item extends Model
             'REPARACION' => ['DISPONIBLE', 'BAJA'],
             'VENDIDO' => [],
             'DEVUELTO' => [],
-            'BAJA' => [],
+            'BAJA' => ['DISPONIBLE', 'REPARACION'],
         ];
 
         return in_array($to, $map[$from] ?? [], true);

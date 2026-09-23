@@ -11,6 +11,7 @@ use App\Models\Item;
 use App\Models\Movimiento;
 use App\Models\Ubicacion;
 use App\Support\ItemCodigo;
+use App\Support\ItemsAcceso;
 use App\Support\Pdf\PiePaginaNumerado;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
@@ -330,6 +331,15 @@ class ItemController extends Controller
             ])->withInput();
         }
 
+        // BAJA -> * es estructuralmente válido (ver Item::canTransition), pero
+        // reactivar un desecho requiere permisos de administrador (ItemsAcceso).
+        if ($item->estado === 'BAJA' && $toEstado !== $item->estado
+            && ! ItemsAcceso::puedeReactivarBaja($request->user())) {
+            return back()->withErrors([
+                'estado' => 'Reactivar un artículo dado de baja requiere permisos de administrador.',
+            ])->withInput();
+        }
+
         unset($data['codigo'], $data['codigo_seq']); // no override
         unset($data['categoria']); // legacy eliminado
         unset($data['foto'], $data['delete_foto']);
@@ -339,7 +349,7 @@ class ItemController extends Controller
         $replacedFotoPath = null;
 
         try {
-            DB::transaction(function () use ($item, $data, $deleteFoto, $newFotoPath, &$replacedFotoPath): void {
+            DB::transaction(function () use ($request, $item, $data, $deleteFoto, $newFotoPath, &$replacedFotoPath): void {
                 $locked = Item::query()->lockForUpdate()->findOrFail($item->getKey());
 
                 $beforeEstado = $locked->estado;
@@ -350,6 +360,15 @@ class ItemController extends Controller
                 if ($beforeEstado !== $toEstadoLocked && ! Item::canTransition($beforeEstado, $toEstadoLocked)) {
                     throw ValidationException::withMessages([
                         'estado' => "No se permite cambiar de {$beforeEstado} a {$toEstadoLocked}.",
+                    ]);
+                }
+
+                // Misma regla, re-verificada bajo lock (defensa en profundidad,
+                // igual que el resto de las validaciones de esta transacción).
+                if ($beforeEstado === 'BAJA' && $toEstadoLocked !== $beforeEstado
+                    && ! ItemsAcceso::puedeReactivarBaja($request->user())) {
+                    throw ValidationException::withMessages([
+                        'estado' => 'Reactivar un artículo dado de baja requiere permisos de administrador.',
                     ]);
                 }
 
@@ -435,6 +454,14 @@ class ItemController extends Controller
                 if (! Item::canTransition($from, $to)) {
                     throw ValidationException::withMessages([
                         'estado' => "No se permite cambiar de {$from} a {$to}.",
+                    ]);
+                }
+
+                // BAJA -> * es estructuralmente válido (ver Item::canTransition), pero
+                // reactivar un desecho requiere permisos de administrador (ItemsAcceso).
+                if ($from === 'BAJA' && ! ItemsAcceso::puedeReactivarBaja($request->user())) {
+                    throw ValidationException::withMessages([
+                        'estado' => 'Reactivar un artículo dado de baja requiere permisos de administrador.',
                     ]);
                 }
 
